@@ -1,0 +1,3064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blockdex — 3D Minecraft Block Explorer</title>
+<meta name="description" content="An interactive 3D gallery of 850+ Minecraft-style blocks, rendered live in WebGL with procedurally generated pixel textures.">
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+CiAgPHBvbHlnb24gcG9pbnRzPSIxNiwzIDI5LDEwIDE2LDE3IDMsMTAiIGZpbGw9IiM3YmM4NmIiLz4KICA8cG9seWdvbiBwb2ludHM9IjMsMTAgMTYsMTcgMTYsMjkgMywyMiIgZmlsbD0iIzZiNGYzMyIvPgogIDxwb2x5Z29uIHBvaW50cz0iMjksMTAgMTYsMTcgMTYsMjkgMjksMjIiIGZpbGw9IiM4YTY2NDIiLz4KPC9zdmc+Cg==">
+<style>
+:root {
+  --bg: #0e1116;
+  --bg-2: #141922;
+  --panel: #1a212c;
+  --line: #26303e;
+  --line-soft: #1f2734;
+  --fg: #e6ecf3;
+  --fg-dim: #93a2b5;
+  --fg-faint: #6b7a8d;
+  --accent: #6ee36e;
+  --accent-2: #4bb0ff;
+  --radius: 14px;
+  --shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  --card: 148px;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 700px at 15% -10%, #1b2533 0%, transparent 60%),
+    radial-gradient(900px 600px at 90% 0%, #17242a 0%, transparent 55%),
+    var(--bg);
+  color: var(--fg);
+  font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The single WebGL surface every card and the viewer draw into. */
+#stage {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ---------- top bar ---------- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  padding: 14px clamp(14px, 4vw, 40px);
+  background: rgba(14, 17, 22, .82);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.brand { display: flex; align-items: center; gap: 12px; }
+
+.brand h1 {
+  margin: 0;
+  font-size: 19px;
+  letter-spacing: .3px;
+  font-weight: 700;
+}
+
+.brand p {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--fg-faint);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+/* Little isometric cube drawn with three gradients. */
+.brand-cube {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 6px;
+  background:
+    linear-gradient(135deg, #7bc86b 0%, #7bc86b 50%, transparent 50%),
+    linear-gradient(225deg, #5aa14f 0%, #5aa14f 50%, transparent 50%),
+    linear-gradient(#8a6642, #6b4f33);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12);
+}
+
+.search-wrap {
+  position: relative;
+  flex: 1;
+  max-width: 520px;
+  margin-left: auto;
+}
+
+.search-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  fill: var(--fg-faint);
+  pointer-events: none;
+}
+
+#search {
+  width: 100%;
+  padding: 10px 34px 10px 36px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--fg);
+  font: inherit;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+#search::placeholder { color: var(--fg-faint); }
+#search::-webkit-search-cancel-button { display: none; }
+
+#search:focus {
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 3px rgba(75, 176, 255, .16);
+}
+
+.clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--line);
+  color: var(--fg-dim);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.topbar-actions { display: flex; gap: 8px; }
+
+.btn {
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--fg-dim);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+}
+
+.btn:hover { color: var(--fg); border-color: #3a4a5e; background: #1c2431; }
+.btn[aria-pressed="true"] { color: #0e1116; background: var(--accent); border-color: var(--accent); }
+
+@media (max-width: 640px) {
+  .topbar { flex-wrap: wrap; gap: 10px; padding: 11px 14px; }
+  .brand p { display: none; }
+  .search-wrap { order: 3; flex-basis: 100%; max-width: none; margin-left: 0; }
+  .topbar-actions { margin-left: auto; }
+}
+
+/* ---------- categories ---------- */
+
+.cats {
+  position: sticky;
+  top: var(--bar-h, 61px);
+  z-index: 19;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px clamp(14px, 4vw, 40px);
+  background: rgba(14, 17, 22, .75);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line-soft);
+  scrollbar-width: thin;
+}
+
+.cats::-webkit-scrollbar { height: 6px; }
+.cats::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+
+.chip {
+  flex: none;
+  padding: 6px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg-dim);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+}
+
+.chip:hover { color: var(--fg); border-color: #3a4a5e; }
+
+.chip.on {
+  color: #0e1116;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.chip .n { opacity: .65; font-variant-numeric: tabular-nums; }
+
+/* ---------- grid ---------- */
+
+main { padding: 18px clamp(14px, 4vw, 40px) 60px; }
+
+.meta-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 6px 2px 14px;
+  font-size: 13px;
+  color: var(--fg-faint);
+}
+
+.count strong { color: var(--fg); font-variant-numeric: tabular-nums; }
+.hint { display: none; }
+@media (min-width: 640px) { .hint { display: block; } }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card), 1fr));
+  gap: 14px;
+}
+
+.card {
+  position: relative;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #182029, #131922);
+  padding: 0 0 10px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform .16s ease, border-color .16s, box-shadow .16s;
+}
+
+.card:hover,
+.card:focus-visible {
+  transform: translateY(-3px);
+  border-color: #3c4c61;
+  box-shadow: var(--shadow);
+  outline: none;
+}
+
+.card:focus-visible { border-color: var(--accent-2); }
+
+/* Reserved square the WebGL stage paints into. */
+.slot {
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 255, 255, .06), transparent 62%);
+}
+
+.card-name {
+  display: block;
+  padding: 0 10px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--fg-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card:hover .card-name { color: var(--fg); }
+
+.card .tag {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-size: 9.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  background: rgba(10, 13, 18, .6);
+  border-radius: 5px;
+  padding: 2px 5px;
+  opacity: 0;
+  transition: opacity .16s;
+}
+
+.card:hover .tag { opacity: 1; }
+
+.card .glow-dot {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffd45e;
+  box-shadow: 0 0 8px 2px rgba(255, 212, 94, .55);
+}
+
+.empty {
+  padding: 60px 0;
+  text-align: center;
+  color: var(--fg-faint);
+}
+
+/* ---------- footer ---------- */
+
+.site-foot {
+  padding: 24px clamp(14px, 4vw, 40px) 40px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--fg-faint);
+  font-size: 12.5px;
+  max-width: 780px;
+}
+
+.site-foot p { margin: 0 0 6px; }
+.site-foot .fine { color: #4d5a6b; }
+
+/* ---------- viewer ---------- */
+
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: clamp(10px, 3vw, 32px);
+}
+
+.viewer[hidden] { display: none; }
+
+.viewer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 8, 11, .74);
+  backdrop-filter: blur(6px);
+}
+
+.viewer-panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr;
+  width: min(940px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .6);
+}
+
+@media (min-width: 760px) {
+  .viewer-panel { grid-template-columns: 1.15fr .85fr; }
+}
+
+.viewer-stage {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;               /* square while stacked on narrow screens */
+  min-height: 300px;
+  background:
+    radial-gradient(circle at 50% 45%, #232f3d 0%, #131922 70%);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+@media (min-width: 760px) {
+  .viewer-stage {
+    aspect-ratio: auto;              /* beside the info column it fills the row */
+    border-bottom: 0;
+    border-right: 1px solid var(--line-soft);
+  }
+}
+
+/* The rectangle the shared WebGL canvas paints the inspected block into. */
+.v-slot {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: grab;
+}
+
+.v-slot.dragging { cursor: grabbing; }
+
+.v-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.v-pos {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 3;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(15, 20, 27, .6);
+  color: var(--fg-dim);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.viewer-close:hover { color: var(--fg); background: rgba(30, 38, 50, .9); }
+
+.viewer-info { padding: 22px 22px 24px; }
+
+.v-head h2 { margin: 0 0 4px; font-size: 21px; }
+
+.v-head code {
+  font-size: 12px;
+  color: var(--accent);
+  background: rgba(110, 227, 110, .09);
+  border: 1px solid rgba(110, 227, 110, .2);
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+
+.v-specs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 14px;
+  margin: 20px 0;
+  padding: 14px 0;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.v-specs dt {
+  font-size: 10.5px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.v-specs dd { margin: 3px 0 0; font-size: 14px; }
+
+.v-tiles { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
+
+.v-tile { text-align: center; }
+
+.v-tile canvas {
+  width: 56px;
+  height: 56px;
+  image-rendering: pixelated;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background:
+    repeating-conic-gradient(#20262f 0% 25%, #171c24 0% 50%) 0 0 / 12px 12px;
+}
+
+.v-tile span {
+  display: block;
+  margin-top: 5px;
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.v-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.v-tip { margin: 14px 0 0; font-size: 12px; color: var(--fg-faint); }
+
+@media (prefers-reduced-motion: reduce) {
+  .card { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="stage" aria-hidden="true"></canvas>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-cube" aria-hidden="true"></span>
+    <div>
+      <h1>Blockdex</h1>
+      <p>3D block explorer</p>
+    </div>
+  </div>
+
+  <div class="search-wrap">
+    <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4a6 6 0 1 0 3.7 10.7l4.8 4.8 1.4-1.4-4.8-4.8A6 6 0 0 0 10 4Zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"/></svg>
+    <input id="search" type="search" placeholder="Search 850+ blocks…  (press /)" autocomplete="off" spellcheck="false" aria-label="Search blocks">
+    <button id="clear-search" class="clear" type="button" title="Clear search" hidden>&times;</button>
+  </div>
+
+  <div class="topbar-actions">
+    <button id="random" class="btn" type="button" title="Open a random block (R)">Random</button>
+    <button id="quality" class="btn" type="button" title="Toggle render quality">HD</button>
+  </div>
+</header>
+
+<nav class="cats" id="cats" aria-label="Block categories"></nav>
+
+<main>
+  <div class="meta-row">
+    <span id="count" class="count"></span>
+    <span class="hint">Click a block to inspect it in 3D</span>
+  </div>
+  <div id="grid" class="grid"></div>
+  <p id="empty" class="empty" hidden>No blocks match that search.</p>
+</main>
+
+<footer class="site-foot">
+  <p>Every block is generated at runtime — geometry, 16&times;16 pixel textures and lighting are all procedural. No images, no libraries, no network requests.</p>
+  <p class="fine">A fan-made tribute. Not affiliated with or endorsed by Mojang or Microsoft.</p>
+</footer>
+
+<div id="viewer" class="viewer" hidden>
+  <div class="viewer-backdrop" data-close></div>
+  <div class="viewer-panel" role="dialog" aria-modal="true" aria-labelledby="v-name">
+    <button class="viewer-close" type="button" data-close title="Close (Esc)">&times;</button>
+    <div class="viewer-stage">
+      <div id="v-slot" class="v-slot"></div>
+    </div>
+    <div class="viewer-info">
+      <div class="v-head">
+        <h2 id="v-name">—</h2>
+        <code id="v-id">—</code>
+      </div>
+      <dl class="v-specs">
+        <div><dt>Category</dt><dd id="v-cat">—</dd></div>
+        <div><dt>Shape</dt><dd id="v-shape">—</dd></div>
+        <div><dt>Faces</dt><dd id="v-faces">—</dd></div>
+        <div><dt>Light</dt><dd id="v-light">—</dd></div>
+      </dl>
+      <div id="v-tiles" class="v-tiles"></div>
+      <div class="v-controls">
+        <button class="btn" type="button" id="v-spin">Pause spin</button>
+        <button class="btn" type="button" id="v-reset">Reset view</button>
+        <button class="btn" type="button" id="v-png">Save PNG</button>
+      </div>
+      <div class="v-nav">
+        <button class="btn" type="button" id="v-prev" title="Previous block (&larr;)">&#8249; Prev</button>
+        <span id="v-pos" class="v-pos"></span>
+        <button class="btn" type="button" id="v-next" title="Next block (&rarr;)">Next &#8250;</button>
+      </div>
+      <p class="v-tip">Drag to orbit &middot; scroll to zoom &middot; arrow keys to browse</p>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Deterministic randomness + small colour helpers.
+   Every texture is generated from a string seed, so a block looks identical
+   on every visit and on every machine. */
+(function (global) {
+  'use strict';
+
+  function hash(str) {
+    var h = 2166136261 >>> 0;
+    for (var i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    return h >>> 0;
+  }
+
+  // mulberry32
+  function rng(seed) {
+    var a = typeof seed === 'string' ? hash(seed) : (seed >>> 0);
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = a;
+      t = Math.imul(t ^ (t >>> 15), 1 | t);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function hexToRgb(hex) {
+    var h = hex.replace('#', '');
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+
+  function rgbToHex(c) {
+    var s = '#';
+    for (var i = 0; i < 3; i++) {
+      var v = Math.max(0, Math.min(255, Math.round(c[i]))).toString(16);
+      s += v.length < 2 ? '0' + v : v;
+    }
+    return s;
+  }
+
+  /** Multiply lightness: f < 1 darkens, f > 1 brightens. */
+  function shade(hex, f) {
+    var c = hexToRgb(hex);
+    return rgbToHex([c[0] * f, c[1] * f, c[2] * f]);
+  }
+
+  /** Linear blend between two hex colours. */
+  function mix(a, b, t) {
+    var x = hexToRgb(a), y = hexToRgb(b);
+    return rgbToHex([
+      x[0] + (y[0] - x[0]) * t,
+      x[1] + (y[1] - x[1]) * t,
+      x[2] + (y[2] - x[2]) * t
+    ]);
+  }
+
+  /** Ramp of n colours around a base, from dark to light. */
+  function ramp(hex, n, spread) {
+    spread = spread == null ? 0.22 : spread;
+    var out = [];
+    for (var i = 0; i < n; i++) {
+      var t = n === 1 ? 0 : i / (n - 1);
+      out.push(shade(hex, 1 - spread + t * spread * 2));
+    }
+    return out;
+  }
+
+  global.Rand = { hash: hash, rng: rng, hexToRgb: hexToRgb, rgbToHex: rgbToHex, shade: shade, mix: mix, ramp: ramp };
+})(window);
+</script>
+<script>
+/* Procedural 16x16 pixel textures.
+
+   A face is described by a small object, e.g.
+       { p: 'planks', c: ['#b8945f', '#a17b4c', '#caa878'] }
+   where `p` names a painter below and `c` is its colour ramp (dark -> light).
+   Painters draw into a 16x16 RGBA buffer; nothing is loaded from disk. */
+(function (global) {
+  'use strict';
+
+  var S = 16;                 // texture resolution
+  var hexToRgb = Rand.hexToRgb;
+  var shade = Rand.shade;
+
+  /* ---------------------------------------------------------------- canvas */
+
+  function Px() {
+    this.d = new Uint8ClampedArray(S * S * 4);
+  }
+
+  Px.prototype.set = function (x, y, hex, a) {
+    x = ((x % S) + S) % S;
+    y = ((y % S) + S) % S;
+    var c = typeof hex === 'string' ? hexToRgb(hex) : hex;
+    var i = (y * S + x) * 4;
+    this.d[i] = c[0]; this.d[i + 1] = c[1]; this.d[i + 2] = c[2];
+    this.d[i + 3] = a == null ? 255 : a;
+  };
+
+  Px.prototype.get = function (x, y) {
+    var i = (((y % S) + S) % S * S + ((x % S) + S) % S) * 4;
+    return [this.d[i], this.d[i + 1], this.d[i + 2], this.d[i + 3]];
+  };
+
+  Px.prototype.fill = function (hex, a) {
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) this.set(x, y, hex, a);
+  };
+
+  /** Darken/brighten a pixel that is already painted. */
+  Px.prototype.tint = function (x, y, f) {
+    var i = (((y % S) + S) % S * S + ((x % S) + S) % S) * 4;
+    this.d[i] *= f; this.d[i + 1] *= f; this.d[i + 2] *= f;
+  };
+
+  Px.prototype.rect = function (x0, y0, x1, y1, hex, a) {
+    for (var y = y0; y <= y1; y++) for (var x = x0; x <= x1; x++) this.set(x, y, hex, a);
+  };
+
+  Px.prototype.frame = function (x0, y0, x1, y1, hex, a) {
+    for (var x = x0; x <= x1; x++) { this.set(x, y0, hex, a); this.set(x, y1, hex, a); }
+    for (var y = y0; y <= y1; y++) { this.set(x0, y, hex, a); this.set(x1, y, hex, a); }
+  };
+
+  /* ---------------------------------------------------------------- noise */
+
+  function pick(rnd, arr) { return arr[(rnd() * arr.length) | 0]; }
+
+  /** Weighted pick that favours the middle of a ramp. */
+  function pickMid(rnd, arr) {
+    var r = rnd(), n = arr.length;
+    var i = r < .18 ? 0 : r < .82 ? (1 + (rnd() * Math.max(1, n - 2)) | 0) : n - 1;
+    return arr[Math.min(i, n - 1)];
+  }
+
+  /** Tiling value noise sampled on an SxS grid. */
+  function valueNoise(rnd, cells) {
+    var g = [], i;
+    for (i = 0; i < cells * cells; i++) g.push(rnd());
+    var step = S / cells;
+    return function (x, y) {
+      var fx = x / step, fy = y / step;
+      var x0 = Math.floor(fx) % cells, y0 = Math.floor(fy) % cells;
+      var x1 = (x0 + 1) % cells, y1 = (y0 + 1) % cells;
+      var tx = fx - Math.floor(fx), ty = fy - Math.floor(fy);
+      tx = tx * tx * (3 - 2 * tx); ty = ty * ty * (3 - 2 * ty);
+      var a = g[y0 * cells + x0], b = g[y0 * cells + x1];
+      var c = g[y1 * cells + x0], d = g[y1 * cells + x1];
+      return (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
+    };
+  }
+
+  /** Voronoi cells, wrapped so the texture tiles. Returns cell id per pixel. */
+  function cells(rnd, n) {
+    var pts = [], i;
+    for (i = 0; i < n; i++) pts.push([rnd() * S, rnd() * S]);
+    return function (x, y) {
+      var best = 1e9, id = 0;
+      for (var k = 0; k < n; k++) {
+        var dx = Math.abs(pts[k][0] - x - .5); if (dx > S / 2) dx = S - dx;
+        var dy = Math.abs(pts[k][1] - y - .5); if (dy > S / 2) dy = S - dy;
+        var d = dx * dx + dy * dy;
+        if (d < best) { best = d; id = k; }
+      }
+      return id;
+    };
+  }
+
+  /* ---------------------------------------------------------------- painters */
+
+  var P = {};
+
+  /* -- generic ground / stone ------------------------------------------- */
+
+  P.solid = function (px, rnd, c) {
+    var base = c[0];
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      px.set(x, y, shade(base, 1 + (rnd() - .5) * .06));
+    }
+  };
+
+  P.smooth = function (px, rnd, c) {
+    var n = valueNoise(rnd, 4);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      px.set(x, y, shade(c[0], .94 + n(x, y) * .12));
+    }
+  };
+
+  P.noise = function (px, rnd, c) {
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) px.set(x, y, pickMid(rnd, c));
+  };
+
+  P.grain = function (px, rnd, c) {
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      px.set(x, y, rnd() < .22 ? pick(rnd, c) : c[Math.min(1, c.length - 1)]);
+    }
+  };
+
+  // Coarse clumps: gravel, coarse dirt, netherrack.
+  P.blobs = function (px, rnd, c) {
+    var id = cells(rnd, 9);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var v = c[id(x, y) % c.length];
+      px.set(x, y, shade(v, 1 + (rnd() - .5) * .1));
+    }
+  };
+
+  P.cobble = function (px, rnd, c) {
+    var id = cells(rnd, 7);
+    var grout = shade(c[0], .62);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var a = id(x, y);
+      var edge = a !== id(x + 1, y) || a !== id(x, y + 1);
+      px.set(x, y, edge ? grout : shade(c[1 + (a % (c.length - 1))], 1 + (rnd() - .5) * .12));
+    }
+  };
+
+  P.deepslate = function (px, rnd, c) {
+    var n = valueNoise(rnd, 8);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var v = n(x * .6, y * 1.6);
+      px.set(x, y, shade(c[0], .86 + v * .3 + (rnd() - .5) * .06));
+    }
+  };
+
+  P.basalt = function (px, rnd, c) {
+    for (var x = 0; x < S; x++) {
+      var col = shade(c[0], .82 + rnd() * .4);
+      for (var y = 0; y < S; y++) px.set(x, y, shade(col, 1 + (rnd() - .5) * .07));
+    }
+  };
+
+  /* -- masonry ----------------------------------------------------------- */
+
+  P.bricks = function (px, rnd, c) {
+    var mortar = c[c.length - 1];
+    var rowH = 4;
+    for (var y = 0; y < S; y++) {
+      var row = (y / rowH) | 0;
+      var off = (row % 2) * 4;
+      for (var x = 0; x < S; x++) {
+        var atRow = y % rowH === 0;
+        var atCol = ((x + off) % 8) === 0;
+        if (atRow || atCol) px.set(x, y, mortar);
+        else px.set(x, y, shade(c[(row + ((x + off) / 8 | 0)) % (c.length - 1)], 1 + (rnd() - .5) * .12));
+      }
+    }
+  };
+
+  P.bigbricks = function (px, rnd, c) {
+    var mortar = shade(c[0], .74);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var half = y < 8 ? 0 : 1;
+      var seam = (y === 0 || y === 8) || (half === 0 ? x === 0 || x === 9 : x === 5 || x === 12);
+      px.set(x, y, seam ? mortar : shade(c[1 % c.length], .92 + rnd() * .2));
+    }
+  };
+
+  P.tiles = function (px, rnd, c) {
+    var mortar = shade(c[0], .68);
+    for (var ty = 0; ty < 2; ty++) {
+      for (var tx = 0; tx < 2; tx++) {
+        var tone = shade(c[1 % c.length], .94 + rnd() * .16);
+        for (var y = 0; y < 8; y++) {
+          for (var x = 0; x < 8; x++) {
+            var gx = tx * 8 + x, gy = ty * 8 + y;
+            px.set(gx, gy, (x === 0 || y === 0) ? mortar : shade(tone, 1 + (rnd() - .5) * .08));
+          }
+        }
+      }
+    }
+  };
+
+  P.chiseled = function (px, rnd, c) {
+    P.smooth(px, rnd, c);
+    px.frame(0, 0, 15, 15, shade(c[0], .72));
+    px.frame(2, 2, 13, 13, shade(c[0], .8));
+    px.rect(6, 4, 9, 11, shade(c[0], 1.12));
+    px.rect(7, 5, 8, 10, shade(c[0], .86));
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) px.tint(x, y, 1 + (rnd() - .5) * .05);
+  };
+
+  P.pillar = function (px, rnd, c) {
+    for (var x = 0; x < S; x++) {
+      var edge = x === 0 || x === 15 || x === 4 || x === 11;
+      var col = edge ? shade(c[0], .82) : shade(c[0], .98 + (x % 3) * .04);
+      for (var y = 0; y < S; y++) px.set(x, y, shade(col, 1 + (rnd() - .5) * .05));
+    }
+  };
+
+  P.rings = function (px, rnd, c) {
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var dx = x - 7.5, dy = y - 7.5;
+      var r = Math.sqrt(dx * dx + dy * dy);
+      var band = (r * 1.15) | 0;
+      px.set(x, y, shade(c[band % c.length], 1 + (rnd() - .5) * .08));
+    }
+  };
+
+  /* -- wood -------------------------------------------------------------- */
+
+  P.planks = function (px, rnd, c) {
+    var boards = [0, 4, 9, 13, 16];
+    for (var b = 0; b < boards.length - 1; b++) {
+      var y0 = boards[b], y1 = boards[b + 1] - 1;
+      var tone = c[b % c.length];
+      var seam = (4 + rnd() * 8) | 0;
+      for (var y = y0; y <= y1; y++) {
+        for (var x = 0; x < S; x++) {
+          var v = 1 + (rnd() - .5) * .1 - (rnd() < .12 ? .08 : 0);
+          px.set(x, y, shade(tone, v));
+        }
+      }
+      for (var x2 = 0; x2 < S; x2++) px.set(x2, y0, shade(tone, .74));
+      for (var y2 = y0; y2 <= y1; y2++) px.set(seam, y2, shade(tone, .78));
+    }
+  };
+
+  P.bark = function (px, rnd, c) {
+    for (var x = 0; x < S; x++) {
+      var tone = c[(rnd() * c.length) | 0];
+      for (var y = 0; y < S; y++) {
+        var v = 1 + (rnd() - .5) * .14;
+        if (rnd() < .07) v -= .18;
+        px.set(x, y, shade(tone, v));
+      }
+    }
+  };
+
+  P.bamboo = function (px, rnd, c) {
+    P.solid(px, rnd, c);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      if (x === 3 || x === 12) px.set(x, y, shade(c[0], .8));
+      if (y === 5 || y === 12) px.set(x, y, shade(c[0], .85));
+    }
+  };
+
+  /* -- ores & minerals --------------------------------------------------- */
+
+  P.ore = function (px, rnd, c, face) {
+    var basePainter = P[face.base || 'noise'];
+    basePainter(px, rnd, face.bc || ['#7d7d7d', '#888888', '#6f6f6f']);
+    var gem = c[0], gem2 = c[1] || shade(gem, 1.25);
+    var spots = 3 + ((rnd() * 3) | 0);
+    for (var s = 0; s < spots; s++) {
+      var cx = (rnd() * S) | 0, cy = (rnd() * S) | 0;
+      var w = 2 + ((rnd() * 2) | 0), h = 2 + ((rnd() * 2) | 0);
+      for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+        if (rnd() < .18) continue;
+        px.set(cx + x, cy + y, rnd() < .35 ? gem2 : gem);
+      }
+      px.set(cx, cy, shade(gem, .74));
+    }
+  };
+
+  P.metal = function (px, rnd, c) {
+    var n = valueNoise(rnd, 4);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var v = .9 + n(x, y) * .2;
+      if (x === 0 || y === 0) v *= 1.08;
+      if (x === 15 || y === 15) v *= .88;
+      px.set(x, y, shade(c[0], v));
+    }
+    px.frame(3, 3, 12, 12, shade(c[0], .82));
+    [[3, 3], [12, 3], [3, 12], [12, 12]].forEach(function (p) { px.set(p[0], p[1], shade(c[0], 1.2)); });
+  };
+
+  P.crystal = function (px, rnd, c) {
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var f = ((x + y) % 6 < 3) ? 1.08 : .9;
+      var g = ((x - y + 16) % 8 < 4) ? 1.04 : .95;
+      px.set(x, y, shade(c[0], f * g + (rnd() - .5) * .06));
+    }
+    px.frame(0, 0, 15, 15, shade(c[0], .78));
+  };
+
+  P.amethyst = function (px, rnd, c) {
+    var id = cells(rnd, 6);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var a = id(x, y);
+      var edge = a !== id(x + 1, y) || a !== id(x, y + 1);
+      px.set(x, y, edge ? shade(c[0], .7) : shade(c[0], .9 + (a % 4) * .09));
+    }
+  };
+
+  /* -- soil & growth ----------------------------------------------------- */
+
+  P.grass_top = function (px, rnd, c) {
+    var n = valueNoise(rnd, 8);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      px.set(x, y, shade(c[0], .84 + n(x, y) * .32 + (rnd() - .5) * .1));
+    }
+  };
+
+  P.grass_side = function (px, rnd, c, face) {
+    var dirt = face.dirt || ['#7b5b3f', '#8b6849', '#6b4e35'];
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) px.set(x, y, pickMid(rnd, dirt));
+    var top = 2 + ((rnd() * 2) | 0);
+    for (var x2 = 0; x2 < S; x2++) {
+      var h = top + (rnd() < .45 ? 1 : 0);
+      for (var y2 = 0; y2 < h; y2++) px.set(x2, y2, shade(c[0], .86 + rnd() * .3));
+    }
+  };
+
+  P.path_top = function (px, rnd, c) {
+    P.noise(px, rnd, c);
+    px.frame(0, 0, 15, 15, shade(c[0], .8));
+  };
+
+  P.farmland = function (px, rnd, c) {
+    P.noise(px, rnd, c);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      if (y % 5 === 0) px.tint(x, y, .78);
+      if (y % 5 === 1) px.tint(x, y, 1.1);
+    }
+  };
+
+  P.mycelium = function (px, rnd, c) {
+    P.noise(px, rnd, c);
+    for (var i = 0; i < 26; i++) px.set((rnd() * S) | 0, (rnd() * S) | 0, c[c.length - 1]);
+  };
+
+  P.moss = function (px, rnd, c) {
+    var n = valueNoise(rnd, 6);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      px.set(x, y, shade(c[0], .8 + n(x, y) * .35 + (rnd() < .1 ? -.15 : 0)));
+    }
+  };
+
+  P.wool = function (px, rnd, c) {
+    var base = c[Math.min(1, c.length - 1)];
+    for (var y = 0; y < S; y++) {
+      for (var x = 0; x < S; x++) {
+        var weave = ((x + y) % 2 === 0 ? 1.04 : .96) * ((x % 4 < 2) === (y % 4 < 2) ? 1.02 : .99);
+        var fuzz = 1 + (rnd() - .5) * .13;
+        px.set(x, y, shade(base, weave * fuzz));
+      }
+    }
+    for (var i = 0; i < 10; i++) px.set((rnd() * S) | 0, (rnd() * S) | 0, shade(base, .86));
+  };
+
+  P.leaves = function (px, rnd, c) {
+    var n = valueNoise(rnd, 8);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var v = n(x, y);
+      if (rnd() < .1 && v < .45) { px.set(x, y, c[0], 0); continue; }
+      px.set(x, y, shade(c[(rnd() * c.length) | 0], .82 + v * .4));
+    }
+  };
+
+  P.wart = function (px, rnd, c) {
+    var id = cells(rnd, 10);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var a = id(x, y);
+      var edge = a !== id(x + 1, y) || a !== id(x, y + 1);
+      px.set(x, y, edge ? shade(c[0], .68) : shade(c[0], .92 + (a % 3) * .1));
+    }
+  };
+
+  P.sculk = function (px, rnd, c) {
+    P.noise(px, rnd, c);
+    for (var i = 0; i < 16; i++) {
+      var x = (rnd() * S) | 0, y = (rnd() * S) | 0;
+      px.set(x, y, c[c.length - 1]);
+      if (rnd() < .5) px.set(x + 1, y, shade(c[c.length - 1], .8));
+    }
+  };
+
+  /* -- plants (cut-out) --------------------------------------------------- */
+
+  function clear(px) {
+    for (var i = 3; i < px.d.length; i += 4) px.d[i] = 0;
+  }
+
+  P.plant = function (px, rnd, c, face) {
+    clear(px);
+    var stem = face.stem || '#4a7a2a';
+    var kind = face.kind || 'flower';
+    var x, y;
+
+    if (kind === 'grass' || kind === 'fern') {
+      for (var b = 0; b < 7; b++) {
+        var bx = 1 + ((rnd() * 14) | 0);
+        var bh = 5 + ((rnd() * 8) | 0);
+        var lean = rnd() < .5 ? -1 : 1;
+        for (y = 0; y < bh; y++) {
+          var xx = bx + ((y / 5) | 0) * lean;
+          px.set(xx, 15 - y, shade(c[0], .82 + (y / bh) * .4));
+        }
+      }
+      return;
+    }
+
+    // Stem
+    var sx = 7 + (rnd() < .5 ? 0 : 1);
+    for (y = 15; y > 6; y--) px.set(sx, y, y % 3 === 0 ? shade(stem, .85) : stem);
+    px.set(sx - 1, 11, shade(stem, .9));
+    px.set(sx + 1, 9, shade(stem, .9));
+
+    if (kind === 'sapling') {
+      for (y = 3; y < 11; y++) {
+        var w = y < 5 ? 2 : y < 8 ? 4 : 5;
+        for (x = sx - w; x <= sx + w; x++) {
+          if (rnd() < .22) continue;
+          px.set(x, y, shade(c[0], .82 + rnd() * .4));
+        }
+      }
+      return;
+    }
+
+    if (kind === 'mushroom') {
+      for (y = 4; y < 8; y++) {
+        var mw = y === 4 ? 2 : y === 5 ? 3 : 4;
+        for (x = sx - mw; x <= sx + mw; x++) px.set(x, y, shade(c[0], y === 4 ? 1.12 : .92 + rnd() * .16));
+      }
+      for (y = 8; y < 15; y++) { px.set(sx, y, '#e8e2d8'); px.set(sx + 1, y, '#cfc7bb'); }
+      return;
+    }
+
+    if (kind === 'tall') {                       // sunflower / lilac style
+      for (y = 1; y < 8; y++) {
+        for (x = sx - 3; x <= sx + 3; x++) {
+          if (rnd() < .3) continue;
+          px.set(x, y, shade(c[0], .85 + rnd() * .35));
+        }
+      }
+      return;
+    }
+
+    // Default: a small flower head
+    var petal = c[0], centre = c[1] || shade(c[0], .7);
+    var head = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1], [1, 1], [-1, -1]];
+    for (var i = 0; i < head.length; i++) {
+      px.set(sx + head[i][0], 5 + head[i][1], petal);
+    }
+    px.set(sx, 5, centre);
+    px.set(sx + 2, 5, shade(petal, .92));
+    px.set(sx - 2, 5, shade(petal, .92));
+  };
+
+  P.crop = function (px, rnd, c) {
+    clear(px);
+    for (var x = 1; x < S; x += 4) {
+      for (var y = 3; y < 16; y++) {
+        px.set(x, y, shade(c[0], .85 + (y / 16) * .35));
+        if (y > 5 && y % 3 === 0) px.set(x + 1, y, shade(c[1] || c[0], 1));
+      }
+    }
+  };
+
+  P.vine = function (px, rnd, c) {
+    clear(px);
+    for (var x = 0; x < S; x++) {
+      if (rnd() < .35) continue;
+      var h = 6 + ((rnd() * 10) | 0);
+      for (var y = 0; y < h; y++) if (rnd() > .18) px.set(x, y, shade(c[0], .8 + rnd() * .4));
+    }
+  };
+
+  P.ladder = function (px, rnd, c) {
+    clear(px);
+    for (var y = 0; y < S; y++) { px.rect(2, y, 3, y, c[0]); px.rect(12, y, 13, y, shade(c[0], .9)); }
+    for (var r = 2; r < S; r += 5) px.rect(4, r, 11, r + 1, shade(c[0], 1.08));
+  };
+
+  P.rail = function (px, rnd, c) {
+    clear(px);
+    px.rect(3, 0, 4, 15, c[0]);
+    px.rect(11, 0, 12, 15, c[0]);
+    for (var y = 1; y < S; y += 4) px.rect(2, y, 13, y + 1, c[1] || '#6b4f33');
+  };
+
+  P.spawner = function (px, rnd, c) {
+    clear(px);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      if (x % 4 < 2 && y % 4 < 2) continue;
+      px.set(x, y, shade(c[0], .82 + ((x + y) % 3) * .12));
+    }
+  };
+
+  /* -- transparent / special --------------------------------------------- */
+
+  P.glass = function (px, rnd, c, face) {
+    var a = face.a == null ? 70 : face.a;
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) px.set(x, y, c[0], a);
+    px.frame(0, 0, 15, 15, shade(c[0], 1.25), Math.min(255, a + 90));
+    for (var i = 0; i < 4; i++) px.set(2 + i, 2 + i, '#ffffff', Math.min(255, a + 120));
+    px.set(12, 3, '#ffffff', Math.min(255, a + 60));
+  };
+
+  P.ice = function (px, rnd, c) {
+    var n = valueNoise(rnd, 5);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      px.set(x, y, shade(c[0], .9 + n(x, y) * .22), 205);
+    }
+    for (var i = 0; i < 12; i++) px.set((rnd() * S) | 0, (rnd() * S) | 0, '#ffffff', 230);
+  };
+
+  P.slime = function (px, rnd, c) {
+    var n = valueNoise(rnd, 4);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      px.set(x, y, shade(c[0], .88 + n(x, y) * .25), 190);
+    }
+    px.frame(3, 3, 12, 12, shade(c[0], .74), 220);
+  };
+
+  P.water = function (px, rnd, c) {
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var w = Math.sin((x + y * .6) * .8) * .5 + .5;
+      px.set(x, y, shade(c[0], .88 + w * .22), 190);
+    }
+  };
+
+  P.lava = function (px, rnd, c) {
+    var n = valueNoise(rnd, 4);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var v = n(x, y);
+      px.set(x, y, v > .62 ? c[2] || '#ffd24a' : v > .35 ? c[1] || '#ff8f2a' : c[0]);
+    }
+  };
+
+  P.obsidian = function (px, rnd, c) {
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      px.set(x, y, rnd() < .12 ? c[1] || '#3b1d5c' : shade(c[0], .9 + rnd() * .25));
+    }
+  };
+
+  P.netherrack = function (px, rnd, c) {
+    var n = valueNoise(rnd, 6);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var v = n(x, y);
+      px.set(x, y, shade(c[0], .78 + v * .45 + (rnd() - .5) * .12));
+    }
+    for (var i = 0; i < 10; i++) px.set((rnd() * S) | 0, (rnd() * S) | 0, shade(c[0], .62));
+  };
+
+  P.glow = function (px, rnd, c) {
+    var n = valueNoise(rnd, 5);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      px.set(x, y, shade(c[0], .82 + n(x, y) * .4));
+    }
+    for (var i = 0; i < 18; i++) px.set((rnd() * S) | 0, (rnd() * S) | 0, c[1] || shade(c[0], 1.3));
+  };
+
+  P.prismarine = function (px, rnd, c) {
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var q = ((x >> 2) + (y >> 2)) % 2;
+      px.set(x, y, shade(c[q % c.length], .92 + rnd() * .18));
+    }
+  };
+
+  P.honeycomb = function (px, rnd, c) {
+    P.solid(px, rnd, c);
+    for (var row = 0; row < 4; row++) {
+      for (var col = 0; col < 4; col++) {
+        var ox = col * 4 + (row % 2 ? 2 : 0), oy = row * 4;
+        px.rect(ox + 1, oy + 1, ox + 2, oy + 2, shade(c[0], .74));
+      }
+    }
+  };
+
+  // Glazed terracotta: a bold two-tone motif, picked deterministically per block.
+  P.glazed = function (px, rnd, c) {
+    var a = c[0], b = c[1] || shade(c[0], .7), w = c[2] || '#e9ecec';
+    var motif = (rnd() * 4) | 0;
+    px.fill(w);
+    for (var y = 0; y < S; y++) {
+      for (var x = 0; x < S; x++) {
+        var v;
+        if (motif === 0) {                                  // quarter arcs
+          var dx = x < 8 ? x : 15 - x, dy = y < 8 ? y : 15 - y;
+          var r = Math.sqrt(dx * dx + dy * dy);
+          v = r < 4 ? a : r < 6.5 ? b : null;
+        } else if (motif === 1) {                           // chevrons
+          v = ((x + y) % 8 < 3) ? a : ((x - y + 16) % 8 < 3) ? b : null;
+        } else if (motif === 2) {                           // nested diamond
+          var d = Math.abs(x - 7.5) + Math.abs(y - 7.5);
+          v = d < 4 ? a : d < 6.5 ? null : b;
+        } else {                                            // corner blocks
+          v = (x < 6 && y < 6) || (x > 9 && y > 9) ? a : (x > 9 && y < 6) || (x < 6 && y > 9) ? b : null;
+        }
+        if (v) px.set(x, y, v);
+      }
+    }
+    px.frame(0, 0, 15, 15, shade(b, .9));
+  };
+
+  P.copper = function (px, rnd, c) {
+    var n = valueNoise(rnd, 5);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var v = n(x, y);
+      px.set(x, y, v > .55 ? shade(c[0], 1.08) : shade(c[1] || c[0], .95 + (rnd() - .5) * .1));
+    }
+  };
+
+  P.sponge = function (px, rnd, c) {
+    P.solid(px, rnd, c);
+    for (var i = 0; i < 26; i++) {
+      var x = (rnd() * S) | 0, y = (rnd() * S) | 0;
+      px.set(x, y, shade(c[0], .62));
+      if (rnd() < .5) px.set(x + 1, y, shade(c[0], .7));
+    }
+  };
+
+  P.snow = function (px, rnd, c) {
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      px.set(x, y, shade(c[0], .97 + rnd() * .06));
+    }
+  };
+
+  /* -- utility blocks ---------------------------------------------------- */
+
+  P.crafting_top = function (px, rnd, c) {
+    P.planks(px, rnd, c);
+    px.frame(0, 0, 15, 15, shade(c[0], .68));
+    for (var i = 1; i < 4; i++) {
+      px.rect(i * 4 - 1, 1, i * 4, 14, shade(c[0], .72));
+      px.rect(1, i * 4 - 1, 14, i * 4, shade(c[0], .72));
+    }
+  };
+
+  P.crafting_front = function (px, rnd, c) {
+    P.planks(px, rnd, c);
+    px.rect(2, 2, 13, 13, shade(c[0], .8));
+    px.frame(2, 2, 13, 13, shade(c[0], .6));
+    px.rect(4, 5, 6, 7, '#8b6a3f');
+    px.rect(9, 9, 11, 11, '#a5a5a5');
+  };
+
+  P.furnace_front = function (px, rnd, c) {
+    P.noise(px, rnd, c);
+    px.rect(3, 6, 12, 13, '#191919');
+    px.frame(3, 6, 12, 13, shade(c[0], .6));
+    px.rect(4, 10, 11, 12, '#5a5148');
+  };
+
+  P.furnace_lit = function (px, rnd, c) {
+    P.noise(px, rnd, c);
+    px.rect(3, 6, 12, 13, '#2a1a08');
+    px.frame(3, 6, 12, 13, shade(c[0], .6));
+    px.rect(4, 10, 11, 12, '#ff9d2a');
+    px.rect(5, 9, 10, 9, '#ffd05e');
+  };
+
+  P.chest_front = function (px, rnd, c) {
+    P.planks(px, rnd, c);
+    px.rect(0, 5, 15, 6, shade(c[0], .6));
+    px.rect(6, 4, 9, 8, '#8f8f8f');
+    px.set(7, 6, '#3a3a3a'); px.set(8, 6, '#3a3a3a');
+  };
+
+  P.bookshelf = function (px, rnd, c) {
+    P.planks(px, rnd, c);
+    var books = ['#a33b2c', '#2f6ea6', '#c9a227', '#3f8a3a', '#7a4fa3', '#b5651d'];
+    [3, 10].forEach(function (y0) {
+      px.rect(0, y0, 15, y0 + 4, '#2f2517');
+      for (var x = 1; x < 15; x += 2) {
+        var h = 3 + ((rnd() * 2) | 0);
+        px.rect(x, y0 + 5 - h, x + 1, y0 + 4, books[(rnd() * books.length) | 0]);
+      }
+    });
+  };
+
+  P.tnt_side = function (px, rnd, c) {
+    P.noise(px, rnd, ['#b3352b', '#a52f26', '#c03a30']);
+    px.rect(0, 5, 15, 10, '#e8e8e8');
+    px.rect(2, 7, 3, 8, '#2b2b2b'); px.rect(5, 7, 6, 8, '#2b2b2b');
+    px.rect(8, 7, 9, 8, '#2b2b2b'); px.rect(11, 7, 12, 8, '#2b2b2b');
+  };
+
+  P.tnt_top = function (px, rnd, c) {
+    P.noise(px, rnd, ['#b3352b', '#a52f26', '#c03a30']);
+    px.frame(4, 4, 11, 11, '#d8d8d8');
+    px.rect(6, 6, 9, 9, '#9a9a9a');
+  };
+
+  P.pumpkin_face = function (px, rnd, c, face) {
+    P.pumpkin_side(px, rnd, c);
+    var ink = face.lit ? '#ffb43d' : '#3a2408';
+    px.rect(3, 4, 5, 7, ink); px.rect(10, 4, 12, 7, ink);
+    px.rect(4, 10, 11, 11, ink);
+    px.rect(5, 9, 6, 9, ink); px.rect(9, 9, 10, 9, ink);
+    px.rect(6, 12, 9, 12, ink);
+  };
+
+  P.pumpkin_side = function (px, rnd, c) {
+    for (var x = 0; x < S; x++) {
+      var groove = x % 4 === 0;
+      for (var y = 0; y < S; y++) {
+        px.set(x, y, shade(c[0], (groove ? .78 : 1) * (.95 + rnd() * .12)));
+      }
+    }
+    px.rect(0, 0, 15, 0, shade(c[0], .7));
+  };
+
+  P.melon_side = function (px, rnd, c) {
+    var n = valueNoise(rnd, 5);
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      px.set(x, y, n(x, y) > .5 ? c[0] : (c[1] || shade(c[0], .72)));
+    }
+  };
+
+  P.hay = function (px, rnd, c) {
+    for (var y = 0; y < S; y++) {
+      var tone = c[(rnd() * c.length) | 0];
+      for (var x = 0; x < S; x++) px.set(x, y, shade(tone, 1 + (rnd() - .5) * .16));
+    }
+    px.rect(0, 7, 15, 8, shade(c[0], .68));
+  };
+
+  P.circuit = function (px, rnd, c) {
+    P.smooth(px, rnd, c);
+    px.frame(1, 1, 14, 14, shade(c[0], .7));
+    px.rect(4, 4, 11, 11, shade(c[0], .82));
+    px.rect(6, 6, 9, 9, c[1] || '#c94b3f');
+    px.rect(7, 7, 8, 8, shade(c[1] || '#c94b3f', 1.3));
+  };
+
+  P.target = function (px, rnd, c) {
+    for (var y = 0; y < S; y++) for (var x = 0; x < S; x++) {
+      var dx = x - 7.5, dy = y - 7.5;
+      var r = Math.sqrt(dx * dx + dy * dy);
+      px.set(x, y, r < 2.5 ? (c[1] || '#c94b3f') : r < 5 ? '#e8e0d0' : r < 7 ? (c[1] || '#c94b3f') : '#e8e0d0');
+    }
+  };
+
+  P.cake = function (px, rnd, c) {
+    P.solid(px, rnd, ['#f0e3d0']);
+    for (var y = 0; y < 4; y++) for (var x = 0; x < S; x++) px.set(x, y, rnd() < .3 ? '#f2f2f2' : '#e8e4dd');
+    for (var i = 0; i < 10; i++) px.set((rnd() * S) | 0, (rnd() * 4) | 0, '#c33b3b');
+  };
+
+  P.door = function (px, rnd, c) {
+    P.planks(px, rnd, c);
+    px.frame(0, 0, 15, 15, shade(c[0], .68));
+    px.rect(2, 2, 13, 6, shade(c[0], .88));
+    px.frame(2, 2, 13, 6, shade(c[0], .7));
+    px.rect(12, 9, 13, 10, '#5a5a5a');
+  };
+
+  P.beacon = function (px, rnd, c) {
+    P.glass(px, rnd, ['#1f2b2f'], { a: 220 });
+    px.rect(4, 4, 11, 11, '#4de0dd');
+    px.rect(6, 6, 9, 9, '#e9fbff');
+  };
+
+  /* ---------------------------------------------------------------- api */
+
+  var cache = Object.create(null);
+
+  /** Paint one face description into a 16x16 RGBA buffer (memoised). */
+  function tile(face, seed) {
+    var key = seed + '|' + JSON.stringify(face);
+    var hit = cache[key];
+    if (hit) return hit;
+    var px = new Px();
+    var rnd = Rand.rng(key);
+    var painter = P[face.p] || P.noise;
+    var colors = face.c && face.c.length ? face.c : ['#8b8b8b', '#9a9a9a', '#7c7c7c'];
+    painter(px, rnd, colors, face);
+    cache[key] = px.d;
+    return px.d;
+  }
+
+  /** Build a horizontal strip atlas out of several faces: one 16px tile each. */
+  function atlas(faces, seed) {
+    var n = faces.length;
+    var data = new Uint8ClampedArray(n * S * S * 4);
+    for (var i = 0; i < n; i++) {
+      var t = tile(faces[i], seed + '/' + i);
+      for (var y = 0; y < S; y++) {
+        for (var x = 0; x < S; x++) {
+          var src = (y * S + x) * 4;
+          var dst = (y * (n * S) + i * S + x) * 4;
+          data[dst] = t[src]; data[dst + 1] = t[src + 1];
+          data[dst + 2] = t[src + 2]; data[dst + 3] = t[src + 3];
+        }
+      }
+    }
+    return { data: data, width: n * S, height: S, tiles: n };
+  }
+
+  /** Draw a single face into a 2D canvas — used by the inspector's swatches. */
+  function toCanvas(face, seed, canvas) {
+    var t = tile(face, seed);
+    canvas.width = S; canvas.height = S;
+    var ctx = canvas.getContext('2d');
+    var img = ctx.createImageData(S, S);
+    img.data.set(t);
+    ctx.putImageData(img, 0, 0);
+    return canvas;
+  }
+
+  global.Textures = { SIZE: S, tile: tile, atlas: atlas, toCanvas: toCanvas, painters: P };
+})(window);
+</script>
+<script>
+/* Geometry builders.
+
+   Every shape is assembled from axis-aligned boxes and quads, exactly like a
+   Minecraft block model. UVs are cropped from the parent block face, so a slab
+   shows the bottom half of its side texture and a fence post shows a 4px strip. */
+(function (global) {
+  'use strict';
+
+  var p = 1 / 16;   // one texel of a block
+
+  function Builder(tileFor, tileCount) {
+    this.pos = [];
+    this.norm = [];
+    this.uv = [];
+    this.idx = [];
+    this.tileFor = tileFor;      // face name -> atlas tile index
+    this.tileCount = tileCount;
+    this.min = [Infinity, Infinity, Infinity];
+    this.max = [-Infinity, -Infinity, -Infinity];
+  }
+
+  Builder.prototype.quad = function (verts, normal, uvs, faceName) {
+    var t = this.tileFor(faceName), n = this.tileCount;
+    var base = this.pos.length / 3;
+    for (var i = 0; i < 4; i++) {
+      var v = verts[i];
+      this.pos.push(v[0], v[1], v[2]);
+      this.norm.push(normal[0], normal[1], normal[2]);
+      // Squeeze the 0..1 face UV into this block's slot of the strip atlas.
+      this.uv.push((t + uvs[i][0]) / n, uvs[i][1]);
+      for (var k = 0; k < 3; k++) {
+        if (v[k] < this.min[k]) this.min[k] = v[k];
+        if (v[k] > this.max[k]) this.max[k] = v[k];
+      }
+    }
+    this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+
+  /** Double-sided quad (used for cut-out plants and panes). */
+  Builder.prototype.quad2 = function (verts, normal, uvs, faceName) {
+    this.quad(verts, normal, uvs, faceName);
+    this.quad([verts[3], verts[2], verts[1], verts[0]],
+      [-normal[0], -normal[1], -normal[2]],
+      [uvs[3], uvs[2], uvs[1], uvs[0]], faceName);
+  };
+
+  /**
+   * Axis-aligned box. `faces` optionally renames the texture used per side,
+   * e.g. {top:'side'} makes the top of a fence post use the side texture.
+   * `skip` lists sides to omit. `stretch` maps the whole texture onto each
+   * side instead of cropping it out of the parent cube.
+   */
+  Builder.prototype.box = function (x0, y0, z0, x1, y1, z1, o) {
+    o = o || {};
+    var f = o.faces || {}, skip = o.skip || {}, st = o.stretch;
+    var self = this;
+
+    function u(v0, v1) { return st ? [0, 1] : [v0, v1]; }
+
+    var ux = u(x0, x1), uy = u(1 - y1, 1 - y0), uz = u(z0, z1);
+    var uzr = u(1 - z1, 1 - z0), uxr = u(1 - x1, 1 - x0);
+
+    if (!skip.top) self.quad(
+      [[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]], [0, 1, 0],
+      [[ux[0], uz[1]], [ux[1], uz[1]], [ux[1], uz[0]], [ux[0], uz[0]]], f.top || 'top');
+
+    if (!skip.bottom) self.quad(
+      [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], [0, -1, 0],
+      [[ux[0], uz[0]], [ux[1], uz[0]], [ux[1], uz[1]], [ux[0], uz[1]]], f.bottom || 'bottom');
+
+    if (!skip.south) self.quad(
+      [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], [0, 0, 1],
+      [[ux[0], uy[1]], [ux[1], uy[1]], [ux[1], uy[0]], [ux[0], uy[0]]], f.south || 'front');
+
+    if (!skip.north) self.quad(
+      [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], [0, 0, -1],
+      [[uxr[0], uy[1]], [uxr[1], uy[1]], [uxr[1], uy[0]], [uxr[0], uy[0]]], f.north || 'back');
+
+    if (!skip.east) self.quad(
+      [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], [1, 0, 0],
+      [[uzr[1], uy[1]], [uzr[0], uy[1]], [uzr[0], uy[0]], [uzr[1], uy[0]]], f.east || 'side');
+
+    if (!skip.west) self.quad(
+      [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], [-1, 0, 0],
+      [[uz[0], uy[1]], [uz[1], uy[1]], [uz[1], uy[0]], [uz[0], uy[0]]], f.west || 'side');
+
+    return this;
+  };
+
+  /** Four-sided spike, used for dripstone and similar tapering blocks. */
+  Builder.prototype.spike = function (x0, z0, x1, z1, y0, y1, tipR, faceName) {
+    var cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    var a = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
+    for (var i = 0; i < 4; i++) {
+      var q = a[i], r = a[(i + 1) % 4];
+      var qt = [cx + (q[0] - cx) * tipR, cz + (q[1] - cz) * tipR];
+      var rt = [cx + (r[0] - cx) * tipR, cz + (r[1] - cz) * tipR];
+      var n = [r[1] - q[1], 0, q[0] - r[0]];
+      this.quad(
+        [[q[0], y0, q[1]], [r[0], y0, r[1]], [rt[0], y1, rt[1]], [qt[0], y1, qt[1]]],
+        n, [[0, 1], [1, 1], [1, 0], [0, 0]], faceName);
+    }
+    this.box(x0, y0 - .001, z0, x1, y0, z1, { skip: { top: 1, north: 1, south: 1, east: 1, west: 1 } });
+    return this;
+  };
+
+  /* ------------------------------------------------------------- shapes */
+
+  var SHAPES = {};
+  function def(name, fn, meta) { SHAPES[name] = { build: fn, label: (meta && meta.label) || name }; }
+
+  def('cube', function (b) { b.box(0, 0, 0, 1, 1, 1); }, { label: 'Full block' });
+
+  def('slab', function (b) { b.box(0, 0, 0, 1, .5, 1); }, { label: 'Slab' });
+
+  def('stairs', function (b) {
+    b.box(0, 0, 0, 1, .5, 1);
+    b.box(0, .5, .5, 1, 1, 1);
+  }, { label: 'Stairs' });
+
+  def('carpet', function (b) { b.box(0, 0, 0, 1, p, 1); }, { label: 'Carpet' });
+
+  def('layer', function (b) { b.box(0, 0, 0, 1, 2 * p, 1); }, { label: 'Layer' });
+
+  def('plate', function (b) { b.box(p, 0, p, 1 - p, p, 1 - p); }, { label: 'Pressure plate' });
+
+  def('button', function (b) { b.box(5 * p, 0, 6 * p, 11 * p, p, 10 * p); }, { label: 'Button' });
+
+  def('pane', function (b) {
+    b.box(7 * p, 0, 0, 9 * p, 1, 1);
+  }, { label: 'Pane' });
+
+  def('fence', function (b) {
+    b.box(6 * p, 0, 6 * p, 10 * p, 1, 10 * p);
+    b.box(7 * p, 6 * p, 0, 9 * p, 9 * p, 1);
+    b.box(7 * p, 12 * p, 0, 9 * p, 15 * p, 1);
+  }, { label: 'Fence' });
+
+  def('wall', function (b) {
+    b.box(4 * p, 0, 4 * p, 12 * p, 1, 12 * p);
+    b.box(5 * p, 0, 0, 11 * p, 13 * p, 1);
+  }, { label: 'Wall' });
+
+  def('gate', function (b) {
+    b.box(0, 5 * p, 7 * p, 2 * p, 1, 9 * p);
+    b.box(14 * p, 5 * p, 7 * p, 1, 1, 9 * p);
+    b.box(2 * p, 6 * p, 7 * p, 14 * p, 9 * p, 9 * p);
+    b.box(2 * p, 12 * p, 7 * p, 14 * p, 15 * p, 9 * p);
+    b.box(6 * p, 9 * p, 7 * p, 10 * p, 12 * p, 9 * p);
+  }, { label: 'Fence gate' });
+
+  def('trapdoor', function (b) { b.box(0, 0, 0, 1, 3 * p, 1, { stretch: true }); }, { label: 'Trapdoor' });
+
+  def('door', function (b) {
+    b.box(0, 0, 0, 1, 1, 3 * p, { stretch: true });
+    b.box(0, 1, 0, 1, 2, 3 * p, { stretch: true });
+  }, { label: 'Door (2 blocks tall)' });
+
+  def('ladder', function (b) {
+    b.quad2([[0, 0, 1 - p], [1, 0, 1 - p], [1, 1, 1 - p], [0, 1, 1 - p]], [0, 0, 1],
+      [[0, 1], [1, 1], [1, 0], [0, 0]], 'front');
+  }, { label: 'Wall-mounted' });
+
+  def('flat', function (b) {
+    b.quad2([[0, p / 2, 1], [1, p / 2, 1], [1, p / 2, 0], [0, p / 2, 0]], [0, 1, 0],
+      [[0, 1], [1, 1], [1, 0], [0, 0]], 'top');
+  }, { label: 'Flat' });
+
+  def('torch', function (b) {
+    b.box(7 * p, 0, 7 * p, 9 * p, 10 * p, 9 * p, { stretch: true, faces: { top: 'side', bottom: 'side' } });
+    b.box(7 * p, 10 * p, 7 * p, 9 * p, 12 * p, 9 * p, {
+      stretch: true,
+      faces: { top: 'top', bottom: 'top', north: 'top', south: 'top', east: 'top', west: 'top' }
+    });
+  }, { label: 'Torch' });
+
+  def('rod', function (b) {
+    b.box(7 * p, 0, 7 * p, 9 * p, 1, 9 * p, { stretch: true });
+  }, { label: 'Rod' });
+
+  def('chain', function (b) {
+    b.box(7.5 * p, 0, 6.5 * p, 8.5 * p, 1, 9.5 * p, { stretch: true });
+    b.box(6.5 * p, 0, 7.5 * p, 9.5 * p, 1, 8.5 * p, { stretch: true });
+  }, { label: 'Chain' });
+
+  def('lantern', function (b) {
+    b.box(5 * p, 0, 5 * p, 11 * p, 7 * p, 11 * p, { stretch: true });
+    b.box(6 * p, 7 * p, 6 * p, 10 * p, 9 * p, 10 * p, { stretch: true });
+    b.box(7.5 * p, 9 * p, 7.5 * p, 8.5 * p, 1, 8.5 * p, { stretch: true });
+  }, { label: 'Lantern' });
+
+  def('cross', function (b) {
+    var a = .5 - .3536, c = .5 + .3536;
+    b.quad2([[a, 0, a], [c, 0, c], [c, 1, c], [a, 1, a]], [-.707, 0, .707],
+      [[0, 1], [1, 1], [1, 0], [0, 0]], 'front');
+    b.quad2([[a, 0, c], [c, 0, a], [c, 1, a], [a, 1, c]], [.707, 0, .707],
+      [[0, 1], [1, 1], [1, 0], [0, 0]], 'front');
+  }, { label: 'Cross (plant)' });
+
+  def('crop', function (b) {
+    [.25, .75].forEach(function (z) {
+      b.quad2([[0, 0, z], [1, 0, z], [1, 1, z], [0, 1, z]], [0, 0, 1],
+        [[0, 1], [1, 1], [1, 0], [0, 0]], 'front');
+    });
+    [.25, .75].forEach(function (x) {
+      b.quad2([[x, 0, 0], [x, 0, 1], [x, 1, 1], [x, 1, 0]], [1, 0, 0],
+        [[0, 1], [1, 1], [1, 0], [0, 0]], 'front');
+    });
+  }, { label: 'Crop' });
+
+  def('cake', function (b) { b.box(p, 0, p, 1 - p, .5, 1 - p); }, { label: 'Cake' });
+
+  def('chest', function (b) {
+    b.box(p, 0, p, 1 - p, 10 * p, 1 - p);
+    b.box(p, 10 * p, p, 1 - p, 14 * p, 1 - p, { faces: { bottom: 'top' } });
+    b.box(7 * p, 7 * p, 0, 9 * p, 11 * p, p, { stretch: true, faces: { south: 'lock', north: 'lock', east: 'lock', west: 'lock', top: 'lock', bottom: 'lock' } });
+  }, { label: 'Chest' });
+
+  def('shulker', function (b) {
+    b.box(0, 0, 0, 1, 8 * p, 1);
+    b.box(p, 8 * p, p, 1 - p, 12 * p, 1 - p, { faces: { bottom: 'top' } });
+  }, { label: 'Shulker box' });
+
+  def('anvil', function (b) {
+    b.box(2 * p, 0, 2 * p, 14 * p, 4 * p, 14 * p);
+    b.box(4 * p, 4 * p, 5 * p, 12 * p, 5 * p, 11 * p);
+    b.box(6 * p, 5 * p, 6 * p, 10 * p, 10 * p, 10 * p);
+    b.box(0, 10 * p, 3 * p, 1, 1, 13 * p);
+  }, { label: 'Anvil' });
+
+  def('skull', function (b) { b.box(4 * p, 0, 4 * p, 12 * p, 8 * p, 12 * p, { stretch: true }); }, { label: 'Head' });
+
+  def('bed', function (b) {
+    b.box(0, 3 * p, 0, 1, 9 * p, 2);
+    b.box(0, 0, 0, 3 * p, 3 * p, 3 * p, { faces: { top: 'bottom' } });
+    b.box(13 * p, 0, 0, 1, 3 * p, 3 * p, { faces: { top: 'bottom' } });
+    b.box(0, 0, 2 - 3 * p, 3 * p, 3 * p, 2, { faces: { top: 'bottom' } });
+    b.box(13 * p, 0, 2 - 3 * p, 1, 3 * p, 2, { faces: { top: 'bottom' } });
+  }, { label: 'Bed (2 blocks)' });
+
+  def('pot', function (b) {
+    b.box(5 * p, 0, 5 * p, 11 * p, 6 * p, 11 * p, { stretch: true });
+    b.box(4.5 * p, 5 * p, 4.5 * p, 11.5 * p, 6 * p, 11.5 * p, { stretch: true });
+  }, { label: 'Flower pot' });
+
+  def('cauldron', function (b) {
+    b.box(0, 0, 0, 1, 3 * p, 1);
+    b.box(0, 3 * p, 0, 2 * p, 1, 1);
+    b.box(14 * p, 3 * p, 0, 1, 1, 1);
+    b.box(2 * p, 3 * p, 0, 14 * p, 1, 2 * p);
+    b.box(2 * p, 3 * p, 14 * p, 14 * p, 1, 1);
+  }, { label: 'Cauldron' });
+
+  def('hopper', function (b) {
+    b.box(0, 10 * p, 0, 1, 1, 1);
+    b.box(4 * p, 4 * p, 4 * p, 12 * p, 10 * p, 12 * p);
+    b.box(6 * p, 0, 6 * p, 10 * p, 4 * p, 10 * p);
+  }, { label: 'Hopper' });
+
+  def('sign', function (b) {
+    b.box(0, 7 * p, 7 * p, 1, 1, 9 * p, { stretch: true });
+    b.box(7 * p, 0, 7.5 * p, 9 * p, 7 * p, 8.5 * p, { stretch: true });
+  }, { label: 'Sign' });
+
+  def('scaffold', function (b) {
+    b.box(0, 14 * p, 0, 1, 1, 1);
+    b.box(0, 0, 0, 2 * p, 14 * p, 2 * p);
+    b.box(14 * p, 0, 0, 1, 14 * p, 2 * p);
+    b.box(0, 0, 14 * p, 2 * p, 14 * p, 1);
+    b.box(14 * p, 0, 14 * p, 1, 14 * p, 1);
+  }, { label: 'Scaffolding' });
+
+  def('spike', function (b) {
+    b.spike(5 * p, 5 * p, 11 * p, 11 * p, 0, 1, .18, 'side');
+  }, { label: 'Pointed' });
+
+  def('campfire', function (b) {
+    b.box(0, 0, 0, 1, p, 1, { faces: { top: 'bottom' } });
+    b.box(0, p, 2 * p, 1, 5 * p, 6 * p, { stretch: true });
+    b.box(2 * p, p, 10 * p, 6 * p, 5 * p, 1, { stretch: true });
+    b.box(0, 5 * p, 6 * p, 1, 9 * p, 10 * p, { stretch: true, faces: { top: 'top' } });
+  }, { label: 'Campfire' });
+
+  /** Build the vertex data for one shape. */
+  function build(name, tileFor, tileCount) {
+    var shape = SHAPES[name] || SHAPES.cube;
+    var b = new Builder(tileFor, tileCount);
+    shape.build(b);
+    return {
+      pos: new Float32Array(b.pos),
+      norm: new Float32Array(b.norm),
+      uv: new Float32Array(b.uv),
+      idx: new Uint16Array(b.idx),
+      count: b.idx.length,
+      min: b.min,
+      max: b.max
+    };
+  }
+
+  global.Shapes = {
+    build: build,
+    label: function (n) { return (SHAPES[n] || SHAPES.cube).label; },
+    names: Object.keys(SHAPES)
+  };
+})(window);
+</script>
+<script>
+/* The block catalogue.
+
+   Blocks are described, not drawn: an id, a shape, and one face description per
+   visible side. Whole families (16 dye colours, 13 wood sets, the stone
+   variants) are expanded programmatically, exactly as they are in the game. */
+(function (global) {
+  'use strict';
+
+  var ramp = Rand.ramp, shade = Rand.shade, mix = Rand.mix;
+
+  var LIST = [];
+  var byId = Object.create(null);
+
+  /** Face description helper: f('planks', '#b8945f') or f('ore', ['#a', '#b']). */
+  function f(pattern, colors, extra) {
+    var face = { p: pattern, c: typeof colors === 'string' ? ramp(colors, 3, .16) : colors };
+    if (extra) for (var k in extra) face[k] = extra[k];
+    return face;
+  }
+
+  var SMALL = { of: 1, the: 1, and: 1, o: 1 };
+
+  function title(id) {
+    return id.split('_').map(function (w, i) {
+      if (i > 0 && SMALL[w]) return w;
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    }).join(' ');
+  }
+
+  /**
+   * Register a block.
+   * spec: { shape, all, top, bottom, side, front, back, lock, alpha, glow, cat, name, tags }
+   */
+  function add(id, cat, spec) {
+    spec = spec || {};
+    var faces = {};
+    if (spec.all) faces.side = spec.all;
+    ['side', 'top', 'bottom', 'front', 'back', 'lock'].forEach(function (n) {
+      if (spec[n]) faces[n] = spec[n];
+    });
+    if (!Object.keys(faces).length) faces.side = f('noise', '#8b8b8b');
+
+    var block = {
+      id: id,
+      name: spec.name || title(id),
+      cat: cat,
+      shape: spec.shape || 'cube',
+      faces: faces,
+      alpha: spec.alpha || null,
+      glow: spec.glow || 0,
+      tags: spec.tags || ''
+    };
+    LIST.push(block);
+    byId[id] = block;
+    return block;
+  }
+
+  var FALLBACK = { bottom: 'top', top: 'side', front: 'side', back: 'side', lock: 'side', side: 'top' };
+
+  function faceList(block) {
+    var out = [];
+    for (var k in block.faces) out.push({ name: k, face: block.faces[k] });
+    return out;
+  }
+
+  /* ================================================================= wood */
+
+  var WOODS = [
+    { id: 'oak', planks: '#b8945f', bark: '#6b5033', barkTop: '#b09055', leaves: '#4c8f2f' },
+    { id: 'spruce', planks: '#7a5a35', bark: '#3b2c17', barkTop: '#8a6d43', leaves: '#2f5f2b' },
+    { id: 'birch', planks: '#d7cb8d', bark: '#d5d2cb', barkTop: '#c8b884', leaves: '#71a74d' },
+    { id: 'jungle', planks: '#b1805c', bark: '#574119', barkTop: '#9a7b4f', leaves: '#3d8a1e' },
+    { id: 'acacia', planks: '#ba6337', bark: '#676157', barkTop: '#a9613a', leaves: '#67a22e' },
+    { id: 'dark_oak', planks: '#4f3218', bark: '#3a2411', barkTop: '#4b3620', leaves: '#3b8419' },
+    { id: 'mangrove', planks: '#773934', bark: '#5a352a', barkTop: '#7a4a3a', leaves: '#4c8c30' },
+    { id: 'cherry', planks: '#e3b3a3', bark: '#33261f', barkTop: '#c98f7d', leaves: '#ffbcdd' },
+    { id: 'pale_oak', planks: '#e5ddd0', bark: '#5b5347', barkTop: '#cfc4b1', leaves: '#8fa877' },
+    { id: 'bamboo', planks: '#c8ab4f', bark: '#7b9d40', barkTop: '#a6b455', leaves: null },
+    { id: 'crimson', planks: '#6a344b', bark: '#5a1e2a', barkTop: '#7b3247', leaves: '#7b1d3a', nether: true },
+    { id: 'warped', planks: '#2b6963', bark: '#397270', barkTop: '#3a8079', leaves: '#187571', nether: true }
+  ];
+
+  WOODS.forEach(function (w) {
+    var name = title(w.id);
+    var planks = f('planks', ramp(w.planks, 4, .13));
+    var bark = f('bark', ramp(w.bark, 4, .18));
+    var barkTop = f('rings', ramp(w.barkTop, 4, .2));
+    var strippedSide = f('bark', ramp(mix(w.planks, w.bark, .35), 3, .12));
+
+    add(w.id + '_planks', 'wood', { all: planks });
+    add(w.id + '_stairs', 'wood', { shape: 'stairs', all: planks });
+    add(w.id + '_slab', 'wood', { shape: 'slab', all: planks });
+    add(w.id + '_fence', 'wood', { shape: 'fence', all: planks });
+    add(w.id + '_fence_gate', 'wood', { shape: 'gate', all: planks });
+    add(w.id + '_door', 'wood', { shape: 'door', all: f('door', ramp(w.planks, 4, .13)) });
+    add(w.id + '_trapdoor', 'wood', { shape: 'trapdoor', all: f('door', ramp(w.planks, 4, .13)) });
+    add(w.id + '_pressure_plate', 'redstone', { shape: 'plate', all: planks });
+    add(w.id + '_button', 'redstone', { shape: 'button', all: planks });
+    add(w.id + '_sign', 'decoration', { shape: 'sign', all: planks });
+
+    if (w.id === 'bamboo') {
+      add('bamboo_block', 'wood', { side: f('bamboo', ramp(w.bark, 3, .14)), top: barkTop });
+      add('stripped_bamboo_block', 'wood', { side: f('bamboo', ramp(mix(w.bark, w.planks, .5), 3, .12)), top: barkTop });
+      add('bamboo_mosaic', 'wood', { all: f('tiles', ramp(w.planks, 3, .14)) });
+      add('bamboo_stalk', 'plants', { shape: 'rod', all: f('bamboo', ramp('#7b9d40', 3, .18)), alpha: 'cutout', name: 'Bamboo' });
+      return;
+    }
+
+    var logId = w.nether ? '_stem' : '_log';
+    var woodId = w.nether ? '_hyphae' : '_wood';
+    add(w.id + logId, 'wood', { side: bark, top: barkTop, bottom: barkTop });
+    add(w.id + woodId, 'wood', { all: bark });
+    add('stripped_' + w.id + logId, 'wood', { side: strippedSide, top: barkTop, bottom: barkTop });
+    add('stripped_' + w.id + woodId, 'wood', { all: strippedSide });
+
+    if (w.leaves) {
+      add(w.id + '_leaves', 'nature', {
+        all: f('leaves', ramp(w.leaves, 4, .22)), alpha: 'cutout',
+        name: w.nether ? name + ' Wart Block' : name + ' Leaves'
+      });
+    }
+    if (!w.nether) {
+      add(w.id + '_sapling', 'plants', {
+        shape: 'cross', alpha: 'cutout',
+        front: f('plant', ramp(w.leaves, 3, .2), { kind: 'sapling', stem: shade(w.bark, 1.3) })
+      });
+    }
+  });
+
+  /* ================================================================ stone */
+
+  var STONES = [
+    { id: 'stone', c: '#7d7d7d', p: 'noise', v: ['stairs', 'slab', 'button', 'pressure_plate'] },
+    { id: 'cobblestone', c: '#8a8a8a', p: 'cobble', v: ['stairs', 'slab', 'wall'] },
+    { id: 'mossy_cobblestone', c: '#7d8a6a', p: 'cobble', v: ['stairs', 'slab', 'wall'] },
+    { id: 'smooth_stone', c: '#a0a0a0', p: 'smooth', v: ['slab'] },
+    { id: 'stone_bricks', c: '#7a7a7a', p: 'bigbricks', v: ['stairs', 'slab', 'wall'] },
+    { id: 'mossy_stone_bricks', c: '#71805f', p: 'bigbricks', v: ['stairs', 'slab', 'wall'] },
+    { id: 'cracked_stone_bricks', c: '#6f6f6f', p: 'bigbricks', v: [] },
+    { id: 'chiseled_stone_bricks', c: '#787878', p: 'chiseled', v: [] },
+    { id: 'granite', c: '#9a6b5b', p: 'noise', v: ['stairs', 'slab', 'wall'] },
+    { id: 'polished_granite', c: '#9c6a5a', p: 'smooth', v: ['stairs', 'slab'] },
+    { id: 'diorite', c: '#cfcfcf', p: 'noise', v: ['stairs', 'slab', 'wall'] },
+    { id: 'polished_diorite', c: '#d3d3d6', p: 'smooth', v: ['stairs', 'slab'] },
+    { id: 'andesite', c: '#88898a', p: 'noise', v: ['stairs', 'slab', 'wall'] },
+    { id: 'polished_andesite', c: '#8b8c8d', p: 'smooth', v: ['stairs', 'slab'] },
+    { id: 'deepslate', c: '#4f4f55', p: 'deepslate', v: [] },
+    { id: 'cobbled_deepslate', c: '#4c4c52', p: 'cobble', v: ['stairs', 'slab', 'wall'] },
+    { id: 'polished_deepslate', c: '#484850', p: 'smooth', v: ['stairs', 'slab', 'wall'] },
+    { id: 'deepslate_bricks', c: '#464650', p: 'bigbricks', v: ['stairs', 'slab', 'wall'] },
+    { id: 'deepslate_tiles', c: '#39393f', p: 'tiles', v: ['stairs', 'slab', 'wall'] },
+    { id: 'chiseled_deepslate', c: '#3d3d44', p: 'chiseled', v: [] },
+    { id: 'cracked_deepslate_bricks', c: '#41414a', p: 'bigbricks', v: [] },
+    { id: 'tuff', c: '#6b6d63', p: 'noise', v: ['stairs', 'slab', 'wall'] },
+    { id: 'polished_tuff', c: '#6d6f66', p: 'smooth', v: ['stairs', 'slab', 'wall'] },
+    { id: 'tuff_bricks', c: '#666861', p: 'bigbricks', v: ['stairs', 'slab', 'wall'] },
+    { id: 'calcite', c: '#dfdfd7', p: 'noise', v: [] },
+    { id: 'dripstone_block', c: '#8a6a5b', p: 'noise', v: [] },
+    { id: 'bricks', c: '#96604a', p: 'bricks', v: ['stairs', 'slab', 'wall'] },
+    { id: 'mud_bricks', c: '#8a6a52', p: 'bricks', v: ['stairs', 'slab', 'wall'] },
+    { id: 'packed_mud', c: '#8f6b4e', p: 'noise', v: [] },
+    { id: 'sandstone', c: '#dbcf8e', p: 'noise', v: ['stairs', 'slab', 'wall'] },
+    { id: 'cut_sandstone', c: '#dccf8f', p: 'bigbricks', v: ['slab'] },
+    { id: 'chiseled_sandstone', c: '#d9cc8b', p: 'chiseled', v: [] },
+    { id: 'smooth_sandstone', c: '#dfd3a0', p: 'smooth', v: ['stairs', 'slab'] },
+    { id: 'red_sandstone', c: '#bf6c26', p: 'noise', v: ['stairs', 'slab', 'wall'] },
+    { id: 'cut_red_sandstone', c: '#bf6d27', p: 'bigbricks', v: ['slab'] },
+    { id: 'chiseled_red_sandstone', c: '#b96b28', p: 'chiseled', v: [] },
+    { id: 'smooth_red_sandstone', c: '#c47630', p: 'smooth', v: ['stairs', 'slab'] },
+    { id: 'blackstone', c: '#2b2529', p: 'noise', v: ['stairs', 'slab', 'wall'] },
+    { id: 'polished_blackstone', c: '#332f36', p: 'smooth', v: ['stairs', 'slab', 'wall', 'button', 'pressure_plate'] },
+    { id: 'polished_blackstone_bricks', c: '#302b31', p: 'bigbricks', v: ['stairs', 'slab', 'wall'] },
+    { id: 'gilded_blackstone', c: '#2f2830', p: 'ore', v: [] },
+    { id: 'basalt', c: '#4c4a4f', p: 'basalt', v: [] },
+    { id: 'smooth_basalt', c: '#48464d', p: 'smooth', v: [] },
+    { id: 'polished_basalt', c: '#5c5a60', p: 'pillar', v: [] },
+    { id: 'nether_bricks', c: '#2d161a', p: 'bricks', v: ['stairs', 'slab', 'wall'] },
+    { id: 'red_nether_bricks', c: '#450d10', p: 'bricks', v: ['stairs', 'slab', 'wall'] },
+    { id: 'chiseled_nether_bricks', c: '#301a1e', p: 'chiseled', v: [] },
+    { id: 'quartz_block', c: '#e6e0d8', p: 'smooth', v: ['stairs', 'slab'] },
+    { id: 'smooth_quartz', c: '#eae4dc', p: 'smooth', v: ['stairs', 'slab'] },
+    { id: 'chiseled_quartz_block', c: '#e5dfd6', p: 'chiseled', v: [] },
+    { id: 'quartz_bricks', c: '#e4ded5', p: 'bigbricks', v: [] },
+    { id: 'purpur_block', c: '#a779a7', p: 'noise', v: ['stairs', 'slab'] },
+    { id: 'end_stone', c: '#dbdf9e', p: 'noise', v: [] },
+    { id: 'end_stone_bricks', c: '#d9de9c', p: 'bigbricks', v: ['stairs', 'slab', 'wall'] },
+    { id: 'prismarine', c: '#63a597', p: 'prismarine', v: ['stairs', 'slab', 'wall'] },
+    { id: 'prismarine_bricks', c: '#68b0a1', p: 'bigbricks', v: ['stairs', 'slab'] },
+    { id: 'dark_prismarine', c: '#33604f', p: 'prismarine', v: ['stairs', 'slab'] },
+    { id: 'obsidian', c: '#100c1c', p: 'obsidian', v: [] },
+    { id: 'crying_obsidian', c: '#1c0b34', p: 'obsidian', v: [], glow: .3 },
+    { id: 'netherrack', c: '#6f3336', p: 'netherrack', v: [] },
+    { id: 'bedrock', c: '#565656', p: 'blobs', v: [] },
+    { id: 'terracotta', c: '#985e44', p: 'noise', v: [] },
+    { id: 'resin_bricks', c: '#c8621f', p: 'bricks', v: ['stairs', 'slab', 'wall'] }
+  ];
+
+  var VARIANT_SHAPE = { stairs: 'stairs', slab: 'slab', wall: 'wall', button: 'button', pressure_plate: 'plate' };
+
+  STONES.forEach(function (s) {
+    var face = f(s.p, ramp(s.c, s.p === 'noise' || s.p === 'blobs' ? 4 : 3, .16));
+    if (s.p === 'ore') face = f('ore', ['#f9d976', '#ffe9a8'], { base: 'noise', bc: ramp(s.c, 3, .18) });
+    if (s.p === 'bricks') face.c = ramp(s.c, 4, .14).concat([shade(s.c, .68)]);
+    if (s.p === 'obsidian') face.c = [s.c, shade(s.c, 2.2)];
+    if (s.p === 'prismarine') face.c = [s.c, shade(s.c, .86), shade(s.c, 1.1)];
+
+    add(s.id, 'stone', { all: face, glow: s.glow || 0 });
+    s.v.forEach(function (v) {
+      var vid = s.id.replace(/s$/, '') + '_' + v;
+      if (s.id === 'quartz_block') vid = 'quartz_' + v;
+      if (/bricks$/.test(s.id)) vid = s.id.replace(/s$/, '') + '_' + v;
+      add(vid, v === 'button' || v === 'pressure_plate' ? 'redstone' : 'stone',
+        { shape: VARIANT_SHAPE[v], all: face });
+    });
+  });
+
+  add('quartz_pillar', 'stone', { side: f('pillar', ramp('#e6e0d8', 3, .1)), top: f('rings', ramp('#e6e0d8', 3, .1)) });
+  add('purpur_pillar', 'stone', { side: f('pillar', ramp('#a779a7', 3, .12)), top: f('rings', ramp('#a779a7', 3, .12)) });
+  add('bone_block', 'stone', { side: f('pillar', ramp('#e5e2d5', 3, .12)), top: f('rings', ramp('#e5e2d5', 3, .12)) });
+  add('reinforced_deepslate', 'stone', { side: f('deepslate', ramp('#4a4c4a', 3, .2)), top: f('circuit', ['#4a4c4a', '#9aa08c']) });
+  add('infested_stone', 'stone', { all: f('noise', ramp('#7d7d7d', 4, .16)) });
+
+  /* ============================================================ minerals */
+
+  var ORES = [
+    { id: 'coal', c: ['#1d1d1d', '#333333'], name: 'Coal' },
+    { id: 'iron', c: ['#d8af93', '#e8c9b0'], name: 'Iron' },
+    { id: 'copper', c: ['#e08a54', '#f0a878'], name: 'Copper', noBlock: true },
+    { id: 'gold', c: ['#f6d13a', '#fce88a'], name: 'Gold' },
+    { id: 'redstone', c: ['#b32d20', '#e34a34'], name: 'Redstone', glow: .12 },
+    { id: 'lapis', c: ['#1f4fbf', '#3f74e0'], name: 'Lapis Lazuli' },
+    { id: 'diamond', c: ['#37d6cd', '#9ef4ee'], name: 'Diamond' },
+    { id: 'emerald', c: ['#17c04e', '#7cf0a0'], name: 'Emerald' }
+  ];
+
+  ORES.forEach(function (o) {
+    add(o.id + '_ore', 'minerals', {
+      all: f('ore', o.c, { base: 'noise', bc: ramp('#7d7d7d', 3, .16) }),
+      glow: o.glow || 0, name: o.name + ' Ore'
+    });
+    add('deepslate_' + o.id + '_ore', 'minerals', {
+      all: f('ore', o.c, { base: 'deepslate', bc: ramp('#4f4f55', 3, .2) }),
+      glow: o.glow || 0, name: 'Deepslate ' + o.name + ' Ore'
+    });
+    if (!o.noBlock) {
+      add(o.id + '_block', 'minerals', { all: f('metal', [o.c[0]]), name: 'Block of ' + o.name });
+    }
+  });
+
+  add('nether_gold_ore', 'minerals', { all: f('ore', ['#f6d13a', '#fce88a'], { base: 'netherrack', bc: ramp('#6f3336', 3, .2) }) });
+  add('nether_quartz_ore', 'minerals', { all: f('ore', ['#eae0d8', '#ffffff'], { base: 'netherrack', bc: ramp('#6f3336', 3, .2) }) });
+  add('ancient_debris', 'minerals', { side: f('blobs', ['#5a4038', '#3f2f2b', '#6b4a3f']), top: f('blobs', ['#6b4a3f', '#4a352f', '#7a564a']) });
+  add('netherite_block', 'minerals', { all: f('metal', ['#443a3d']), name: 'Block of Netherite' });
+  add('raw_iron_block', 'minerals', { all: f('blobs', ['#d3a583', '#bd8f70', '#e3b795']), name: 'Block of Raw Iron' });
+  add('raw_copper_block', 'minerals', { all: f('blobs', ['#c5764a', '#a9613c', '#dd8f60']), name: 'Block of Raw Copper' });
+  add('raw_gold_block', 'minerals', { all: f('blobs', ['#e0b53a', '#c79c2c', '#f2cf5c']), name: 'Block of Raw Gold' });
+  add('amethyst_block', 'minerals', { all: f('amethyst', ['#8a5fd0']) });
+  add('budding_amethyst', 'minerals', { all: f('amethyst', ['#7d54c4']) });
+  add('amethyst_cluster', 'minerals', { shape: 'cross', alpha: 'cutout', glow: .35, front: f('plant', ['#c39bf0', '#8a5fd0'], { kind: 'tall', stem: '#6f4bb0' }) });
+
+  // Copper oxidation ladder, waxed and unwaxed shapes alike.
+  var COPPER = [
+    { id: '', name: '', c: '#c06a3c' },
+    { id: 'exposed_', name: 'Exposed ', c: '#a1836a' },
+    { id: 'weathered_', name: 'Weathered ', c: '#6f9a72' },
+    { id: 'oxidized_', name: 'Oxidized ', c: '#54a381' }
+  ];
+
+  COPPER.forEach(function (o) {
+    var base = f('copper', [o.c, shade(o.c, .86)]);
+    var cut = f('tiles', ramp(o.c, 3, .14));
+    add(o.id + 'copper_block', 'minerals', { all: base, name: 'Block of ' + o.name + 'Copper' });
+    add(o.id + 'cut_copper', 'minerals', { all: cut, name: o.name + 'Cut Copper' });
+    add(o.id + 'cut_copper_stairs', 'minerals', { shape: 'stairs', all: cut, name: o.name + 'Cut Copper Stairs' });
+    add(o.id + 'cut_copper_slab', 'minerals', { shape: 'slab', all: cut, name: o.name + 'Cut Copper Slab' });
+    add(o.id + 'copper_grate', 'minerals', { all: f('spawner', [o.c]), alpha: 'cutout', name: o.name + 'Copper Grate' });
+    add(o.id + 'chiseled_copper', 'minerals', { all: f('chiseled', ramp(o.c, 3, .16)), name: o.name + 'Chiseled Copper' });
+    add(o.id + 'copper_door', 'minerals', { shape: 'door', all: f('door', ramp(o.c, 4, .14)), name: o.name + 'Copper Door' });
+    add(o.id + 'copper_trapdoor', 'minerals', { shape: 'trapdoor', all: f('door', ramp(o.c, 4, .14)), name: o.name + 'Copper Trapdoor' });
+    add(o.id + 'copper_bulb', 'light', { all: f('circuit', [o.c, '#ffd98a']), glow: .8, name: o.name + 'Copper Bulb' });
+  });
+
+  global.Blocks = {
+    list: LIST, byId: byId, add: add, f: f, ramp: ramp, title: title,
+    faceList: faceList,
+    fallbackFace: function (n) { return FALLBACK[n]; }
+  };
+})(window);
+</script>
+<script>
+/* The rest of the catalogue: terrain, plants, the 16-colour families,
+   the Nether and End, redstone and utility blocks. */
+(function () {
+  'use strict';
+
+  var add = Blocks.add, f = Blocks.f, ramp = Blocks.ramp, title = Blocks.title;
+  var shade = Rand.shade, mix = Rand.mix;
+
+  var DIRT = ['#8b6849', '#7b5b3f', '#6b4e35'];
+
+  /* ============================================================== terrain */
+
+  add('grass_block', 'nature', {
+    top: f('grass_top', '#5fa543'),
+    side: f('grass_side', ['#5fa543'], { dirt: DIRT }),
+    bottom: f('noise', DIRT)
+  });
+  add('dirt', 'nature', { all: f('noise', DIRT) });
+  add('coarse_dirt', 'nature', { all: f('blobs', ['#7b5b3f', '#6b4e35', '#8b6849']) });
+  add('rooted_dirt', 'nature', { all: f('blobs', ['#8a6a4a', '#c8a878', '#7b5b3f']) });
+  add('podzol', 'nature', {
+    top: f('noise', ['#6a4a20', '#7d5a28', '#5a3f1c']),
+    side: f('grass_side', ['#6a4a20'], { dirt: DIRT }),
+    bottom: f('noise', DIRT)
+  });
+  add('mycelium', 'nature', {
+    top: f('mycelium', ['#6f6265', '#7d7076', '#b6a8ad']),
+    side: f('grass_side', ['#6f6265'], { dirt: DIRT }),
+    bottom: f('noise', DIRT)
+  });
+  add('farmland', 'nature', { top: f('farmland', ['#5b3c22', '#6b4a2a', '#4a2f18']), side: f('noise', DIRT), bottom: f('noise', DIRT) });
+  add('dirt_path', 'nature', { shape: 'layer', top: f('path_top', ['#96794a', '#8a6d42', '#a4875a']), side: f('noise', DIRT), bottom: f('noise', DIRT) });
+  add('mud', 'nature', { all: f('smooth', '#3d3a3f') });
+  add('muddy_mangrove_roots', 'nature', { side: f('bark', ramp('#4a3f33', 3, .2)), top: f('blobs', ['#3d3a3f', '#5a4a3a', '#4a3f33']) });
+  add('mangrove_roots', 'nature', { all: f('bark', ramp('#6a4a35', 3, .22)), alpha: 'cutout' });
+  add('pointed_dripstone', 'nature', { shape: 'spike', alpha: 'cutout', all: f('noise', ramp('#8a6a5b', 3, .18)) });
+  add('clay', 'nature', { all: f('smooth', '#a4a8b6') });
+  add('gravel', 'nature', { all: f('blobs', ['#7f7c78', '#8f8c88', '#6e6b67', '#9c9894']) });
+  add('sand', 'nature', { all: f('grain', ['#e6dbab', '#dbcf9c', '#efe6bd']) });
+  add('red_sand', 'nature', { all: f('grain', ['#bf6c26', '#a95f22', '#cf7c32']) });
+  add('suspicious_sand', 'nature', { all: f('grain', ['#dcd0a0', '#c9bd8d', '#efe6bd']) });
+  add('suspicious_gravel', 'nature', { all: f('blobs', ['#7f7c78', '#96928c', '#6e6b67']) });
+  add('snow_block', 'nature', { all: f('snow', '#f4f8f8') });
+  add('snow', 'nature', { shape: 'layer', all: f('snow', '#f4f8f8') });
+  add('powder_snow', 'nature', { all: f('snow', '#f8fcfc') });
+  add('ice', 'nature', { all: f('ice', '#8fb6f0'), alpha: 'blend' });
+  add('packed_ice', 'nature', { all: f('smooth', '#7fa8e8') });
+  add('blue_ice', 'nature', { all: f('smooth', '#6f9ce8') });
+  add('moss_block', 'nature', { all: f('moss', '#5a7a30') });
+  add('moss_carpet', 'nature', { shape: 'carpet', all: f('moss', '#5a7a30') });
+  add('pale_moss_block', 'nature', { all: f('moss', '#6a7a68') });
+  add('pale_moss_carpet', 'nature', { shape: 'carpet', all: f('moss', '#6a7a68') });
+  add('magma_block', 'nature', { all: f('lava', ['#8a3a12', '#c85a18', '#ffab3a']), glow: .55 });
+  add('soul_sand', 'nature', { all: f('blobs', ['#544139', '#463630', '#63504a']) });
+  add('soul_soil', 'nature', { all: f('noise', ['#4b3a33', '#59453d', '#3f312b']) });
+  add('obsidian_pillar', 'stone', { name: 'Obsidian Pillar', side: f('pillar', ramp('#100c1c', 3, .8)), top: f('rings', ramp('#100c1c', 3, .9)) });
+
+  // Sculk
+  add('sculk', 'nature', { all: f('sculk', ['#0f2027', '#132b33', '#1d4c56', '#3ec7c2']), glow: .12 });
+  add('sculk_vein', 'nature', { shape: 'flat', top: f('vine', ['#1d4c56']), alpha: 'cutout', glow: .1 });
+  add('sculk_catalyst', 'nature', { top: f('sculk', ['#132b33', '#1d4c56', '#61f7ef']), side: f('sculk', ['#0f2027', '#132b33', '#3ec7c2']), bottom: f('noise', ['#20262b']), glow: .3 });
+  add('sculk_shrieker', 'nature', { shape: 'slab', top: f('circuit', ['#1a3540', '#a8f0e0']), side: f('sculk', ['#132b33', '#1d4c56']), glow: .25 });
+  add('sculk_sensor', 'redstone', { shape: 'slab', top: f('circuit', ['#12303a', '#3ec7c2']), side: f('sculk', ['#0f2027', '#1d4c56']), glow: .2 });
+
+  /* ================================================================ plants */
+
+  function plant(id, cat, colors, kind, opts) {
+    opts = opts || {};
+    add(id, cat || 'plants', {
+      shape: opts.shape || 'cross',
+      alpha: 'cutout',
+      glow: opts.glow || 0,
+      name: opts.name,
+      front: f('plant', colors, { kind: kind, stem: opts.stem || '#3f7a24' })
+    });
+  }
+
+  plant('short_grass', 'plants', ['#63a63f'], 'grass');
+  plant('tall_grass', 'plants', ['#5f9e3c'], 'grass');
+  plant('fern', 'plants', ['#4f9440'], 'fern');
+  plant('large_fern', 'plants', ['#4a8c3c'], 'fern');
+  plant('dead_bush', 'plants', ['#946428'], 'fern');
+  plant('seagrass', 'plants', ['#2f8f3a'], 'grass');
+  plant('kelp', 'plants', ['#3a7a35'], 'grass');
+  plant('nether_sprouts', 'nether', ['#1d9c8f'], 'grass');
+  plant('crimson_roots', 'nether', ['#8b2141'], 'grass');
+  plant('warped_roots', 'nether', ['#14b3a6'], 'grass');
+  plant('twisting_vines', 'nether', ['#14a396'], 'grass');
+  plant('weeping_vines', 'nether', ['#8c1b2b'], 'grass');
+  plant('sugar_cane', 'plants', ['#96c56a'], 'grass');
+  plant('cave_vines', 'plants', ['#5f8a3a'], 'grass', { glow: .3 });
+  plant('hanging_roots', 'plants', ['#c8a878'], 'grass');
+  plant('spore_blossom', 'plants', ['#d264c8', '#8a2f80'], 'flower', { stem: '#4a7a2a' });
+
+  var FLOWERS = [
+    ['dandelion', '#ffec4f', '#c8a800'],
+    ['poppy', '#d63a2f', '#2f2f2f'],
+    ['blue_orchid', '#2eb0e0', '#f2f2a0'],
+    ['allium', '#b57ce0', '#e6d0ff'],
+    ['azure_bluet', '#f0f0f0', '#e0d24a'],
+    ['red_tulip', '#d63a2f', '#f0e46a'],
+    ['orange_tulip', '#f08a2a', '#f0e46a'],
+    ['white_tulip', '#f2f2f2', '#f0e46a'],
+    ['pink_tulip', '#eda8d0', '#f0e46a'],
+    ['oxeye_daisy', '#f4f4f0', '#f5d800'],
+    ['cornflower', '#4a6ee0', '#7f97ff'],
+    ['lily_of_the_valley', '#f6f6f6', '#dfe6cf'],
+    ['wither_rose', '#20201f', '#3a3a38'],
+    ['torchflower', '#e07a2a', '#f7c04a'],
+    ['pitcher_plant', '#8a5fd0', '#c39bf0'],
+    ['pink_petals', '#f2b6d8', '#ffd8ea'],
+    ['closed_eyeblossom', '#d8c8b0', '#8a7a60'],
+    ['open_eyeblossom', '#f0e0c0', '#c8a060']
+  ];
+  FLOWERS.forEach(function (fl) { plant(fl[0], 'plants', [fl[1], fl[2]], 'flower'); });
+
+  [['sunflower', '#f7d63a'], ['lilac', '#c9a2d6'], ['rose_bush', '#c8302a'], ['peony', '#e0aed6']].forEach(function (t) {
+    plant(t[0], 'plants', [t[1], shade(t[1], .8)], 'tall');
+  });
+
+  plant('brown_mushroom', 'plants', ['#a07050'], 'mushroom');
+  plant('red_mushroom', 'plants', ['#cc3a30', '#f0f0f0'], 'mushroom');
+  plant('crimson_fungus', 'nether', ['#8b2141'], 'mushroom');
+  plant('warped_fungus', 'nether', ['#199c8f'], 'mushroom');
+
+  ['wheat', 'carrots', 'potatoes', 'beetroots', 'torchflower_crop', 'pitcher_crop'].forEach(function (c, i) {
+    var col = [['#c8b45a', '#e0d07a'], ['#3f8f2a', '#e07a1a'], ['#3f8f2a', '#d8d84a'], ['#2f7a2a', '#b03a2a'], ['#4a8a3a', '#e07a2a'], ['#4a8a3a', '#8a5fd0']][i];
+    add(c, 'plants', { shape: 'crop', alpha: 'cutout', front: f('crop', col) });
+  });
+  add('nether_wart', 'nether', { shape: 'crop', alpha: 'cutout', front: f('crop', ['#8b1e2a', '#b02a38']) });
+  add('sweet_berry_bush', 'plants', { shape: 'cross', alpha: 'cutout', front: f('plant', ['#3f7a2a', '#c8302a'], { kind: 'sapling', stem: '#4a3a20' }) });
+  add('lily_pad', 'plants', { shape: 'flat', alpha: 'cutout', top: f('moss', '#2f7a2a') });
+  add('vine', 'plants', { shape: 'ladder', alpha: 'cutout', front: f('vine', ['#3f7a24']) });
+  add('glow_lichen', 'plants', { shape: 'ladder', alpha: 'cutout', glow: .35, front: f('vine', ['#7ba88a']) });
+  add('big_dripleaf', 'plants', { shape: 'flat', alpha: 'cutout', top: f('moss', '#4f8a2f') });
+  add('small_dripleaf', 'plants', { shape: 'cross', alpha: 'cutout', front: f('plant', ['#4f8a2f'], { kind: 'sapling', stem: '#7a5a30' }) });
+  add('sea_pickle', 'ocean', { shape: 'pot', glow: .4, all: f('noise', ['#5a6a2a', '#6f8a34', '#8aa84a']) });
+  add('azalea', 'nature', { top: f('leaves', ramp('#5f8a3a', 3, .2)), side: f('leaves', ramp('#4f7a30', 3, .2)), bottom: f('noise', DIRT), alpha: 'cutout' });
+  add('flowering_azalea', 'nature', { top: f('leaves', ['#d264c8', '#5f8a3a', '#7aa84a']), side: f('leaves', ['#d264c8', '#4f7a30', '#6a9a3a']), bottom: f('noise', DIRT), alpha: 'cutout' });
+  add('azalea_leaves', 'nature', { all: f('leaves', ramp('#5f8a3a', 4, .22)), alpha: 'cutout' });
+  add('flowering_azalea_leaves', 'nature', { all: f('leaves', ['#d264c8', '#5f8a3a', '#6a9a3a', '#7aa84a']), alpha: 'cutout' });
+  add('cactus', 'plants', { side: f('noise', ['#0f7a3a', '#13873f', '#0b6a32']), top: f('noise', ['#13873f', '#17944a']) });
+  add('brown_mushroom_block', 'nature', { all: f('solid', '#9a7150') });
+  add('red_mushroom_block', 'nature', { all: f('solid', '#c63a30') });
+  add('mushroom_stem', 'nature', { all: f('solid', '#e0d8cf') });
+  add('nether_wart_block', 'nether', { all: f('wart', ['#7a0b18']) });
+  add('warped_wart_block', 'nether', { all: f('wart', ['#167a76']) });
+  add('shroomlight', 'light', { all: f('wart', ['#f0a63a']), glow: .95 });
+  add('crimson_nylium', 'nether', { top: f('netherrack', '#7a1130'), side: f('grass_side', ['#7a1130'], { dirt: ['#6f3336', '#5f2b2e', '#7c3d40'] }), bottom: f('netherrack', '#6f3336') });
+  add('warped_nylium', 'nether', { top: f('netherrack', '#177a72'), side: f('grass_side', ['#177a72'], { dirt: ['#6f3336', '#5f2b2e', '#7c3d40'] }), bottom: f('netherrack', '#6f3336') });
+
+  /* ============================================================== 16 colours */
+
+  var DYE = [
+    ['white', '#e9ecec'], ['orange', '#f07613'], ['magenta', '#bd44b3'], ['light_blue', '#3aafd9'],
+    ['yellow', '#f8c627'], ['lime', '#70b919'], ['pink', '#ed8dac'], ['gray', '#3e4447'],
+    ['light_gray', '#8e8e86'], ['cyan', '#158991'], ['purple', '#8932b8'], ['blue', '#3c44aa'],
+    ['brown', '#835432'], ['green', '#5e7c16'], ['red', '#a12722'], ['black', '#181414']
+  ];
+
+  DYE.forEach(function (d) {
+    var id = d[0], c = d[1];
+    var terra = mix(c, '#985e44', .45);
+
+    add(id + '_wool', 'colored', { all: f('wool', ramp(c, 4, .12)) });
+    add(id + '_carpet', 'colored', { shape: 'carpet', all: f('wool', ramp(c, 4, .12)) });
+    add(id + '_concrete', 'colored', { all: f('solid', shade(c, 1.02)) });
+    add(id + '_concrete_powder', 'colored', { all: f('grain', ramp(shade(c, 1.12), 3, .1)) });
+    add(id + '_terracotta', 'colored', { all: f('noise', ramp(terra, 4, .14)) });
+    add(id + '_glazed_terracotta', 'colored', { all: f('glazed', [c, shade(c, .68), mix(c, '#ffffff', .78)]) });
+    add(id + '_stained_glass', 'glass', { all: f('glass', [c], { a: 92 }), alpha: 'blend' });
+    add(id + '_stained_glass_pane', 'glass', { shape: 'pane', all: f('glass', [c], { a: 92 }), alpha: 'blend' });
+    add(id + '_bed', 'decoration', { shape: 'bed', top: f('wool', ramp(c, 3, .1)), side: f('wool', ramp(shade(c, .9), 3, .1)), bottom: f('planks', ramp('#b8945f', 3, .12)) });
+    add(id + '_candle', 'light', { shape: 'rod', glow: .55, all: f('solid', mix(c, '#f0e6d0', .35)) });
+    add(id + '_shulker_box', 'utility', { shape: 'shulker', top: f('chiseled', ramp(shade(c, 1.12), 3, .14)), side: f('chiseled', ramp(c, 3, .14)), bottom: f('solid', shade(c, .8)) });
+    add(id + '_banner', 'decoration', { shape: 'sign', all: f('wool', ramp(c, 3, .1)) });
+  });
+
+  add('glass', 'glass', { all: f('glass', ['#d6f0f5'], { a: 46 }), alpha: 'blend' });
+  add('glass_pane', 'glass', { shape: 'pane', all: f('glass', ['#d6f0f5'], { a: 46 }), alpha: 'blend' });
+  add('tinted_glass', 'glass', { all: f('glass', ['#2b2630'], { a: 190 }), alpha: 'blend' });
+  add('iron_bars', 'utility', { shape: 'pane', all: f('spawner', ['#b0b0b0']), alpha: 'cutout' });
+  add('honey_block', 'utility', { all: f('slime', ['#f7b83a']), alpha: 'blend' });
+  add('slime_block', 'utility', { all: f('slime', ['#7ac57a']), alpha: 'blend' });
+  add('sponge', 'ocean', { all: f('sponge', '#c7c554') });
+  add('wet_sponge', 'ocean', { all: f('sponge', '#a2a545') });
+
+  /* ================================================================ ocean */
+
+  var CORALS = [['tube', '#2f4fd0'], ['brain', '#d05a9a'], ['bubble', '#a02fc0'], ['fire', '#d03a3a'], ['horn', '#e0c83a']];
+  CORALS.forEach(function (c) {
+    add(c[0] + '_coral_block', 'ocean', { all: f('blobs', ramp(c[1], 4, .2)) });
+    add(c[0] + '_coral', 'ocean', { shape: 'cross', alpha: 'cutout', front: f('plant', [c[1], shade(c[1], 1.3)], { kind: 'sapling', stem: shade(c[1], .8) }) });
+    add(c[0] + '_coral_fan', 'ocean', { shape: 'flat', alpha: 'cutout', top: f('vine', [c[1]]) });
+    add('dead_' + c[0] + '_coral_block', 'ocean', { all: f('blobs', ramp('#8b8378', 4, .18)) });
+  });
+  add('sea_lantern', 'light', { all: f('prismarine', ['#c8e8e0', '#a8d8d0', '#e8f8f0']), glow: 1 });
+  add('conduit', 'light', { shape: 'skull', glow: .9, all: f('chiseled', ramp('#d8c8a0', 3, .2)) });
+  add('bubble_column', 'ocean', { all: f('water', ['#3a6fd0']), alpha: 'blend' });
+  add('water', 'ocean', { all: f('water', ['#3f76e4']), alpha: 'blend' });
+  add('lava', 'nether', { all: f('lava', ['#c02a08', '#e86a12', '#ffd24a']), glow: 1 });
+
+  /* ========================================================== nether & end */
+
+  add('glowstone', 'light', { all: f('glow', ['#a5824a', '#ffe08a']), glow: 1 });
+  add('ochre_froglight', 'light', { side: f('pillar', ramp('#e8dfa8', 3, .1)), top: f('rings', ramp('#e8dfa8', 3, .12)), glow: 1 });
+  add('verdant_froglight', 'light', { side: f('pillar', ramp('#c8e8b8', 3, .1)), top: f('rings', ramp('#c8e8b8', 3, .12)), glow: 1 });
+  add('pearlescent_froglight', 'light', { side: f('pillar', ramp('#f0d8e8', 3, .1)), top: f('rings', ramp('#f0d8e8', 3, .12)), glow: 1 });
+  add('end_rod', 'light', { shape: 'rod', glow: .9, all: f('pillar', ramp('#f2eee6', 3, .08)) });
+  add('chorus_flower', 'end', { all: f('noise', ['#a08aa0', '#c8b0c8', '#8a7a8a']) });
+  add('chorus_plant', 'end', { all: f('noise', ['#5a3f5a', '#6f4f6f', '#4a334a']) });
+  add('dragon_egg', 'end', { shape: 'skull', all: f('obsidian', ['#0d0912', '#3b1d5c']), glow: .2 });
+  add('end_portal_frame', 'end', { shape: 'slab', top: f('crystal', ['#3ec7a2']), side: f('noise', ramp('#c8cf8e', 3, .14)), bottom: f('noise', ramp('#c8cf8e', 3, .14)), glow: .3 });
+  add('nether_portal', 'nether', { shape: 'pane', all: f('crystal', ['#8a2fd0']), alpha: 'blend', glow: .8 });
+  add('respawn_anchor', 'nether', { top: f('circuit', ['#2b2338', '#6f3ad0']), side: f('noise', ramp('#241d2f', 3, .3)), glow: .5 });
+  add('lodestone', 'utility', { top: f('circuit', ['#8a8a8f', '#3f3f45']), side: f('pillar', ramp('#8a8a8f', 3, .14)) });
+  add('soul_torch', 'light', { shape: 'torch', glow: .8, side: f('bark', ramp('#6b5033', 3, .18)), top: f('glow', ['#2aa8c8', '#8ff0ff']) });
+  add('torch', 'light', { shape: 'torch', glow: .85, side: f('bark', ramp('#6b5033', 3, .18)), top: f('glow', ['#e0a02a', '#ffe08a']) });
+  add('redstone_torch', 'redstone', { shape: 'torch', glow: .6, side: f('bark', ramp('#6b5033', 3, .18)), top: f('glow', ['#c02a20', '#ff7a6a']) });
+  add('lantern', 'light', { shape: 'lantern', glow: .95, all: f('metal', ['#c8a24a']) });
+  add('soul_lantern', 'light', { shape: 'lantern', glow: .85, all: f('metal', ['#4aa8c0']) });
+  add('chain', 'decoration', { shape: 'chain', alpha: 'cutout', all: f('metal', ['#6f7078']) });
+  add('campfire', 'light', { shape: 'campfire', glow: .7, top: f('lava', ['#8a3a12', '#e06a12', '#ffd24a']), side: f('bark', ramp('#6b5033', 3, .18)), bottom: f('noise', ramp('#3a3a3a', 3, .2)) });
+  add('soul_campfire', 'light', { shape: 'campfire', glow: .7, top: f('lava', ['#12708a', '#2aa8c8', '#8ff0ff']), side: f('bark', ramp('#6b5033', 3, .18)), bottom: f('noise', ramp('#3a3a3a', 3, .2)) });
+
+  /* ============================================================== utility */
+
+  var OAK = ramp('#b8945f', 4, .13);
+
+  add('crafting_table', 'utility', { top: f('crafting_top', OAK), front: f('crafting_front', OAK), side: f('planks', ramp('#8a6a3f', 4, .12)), bottom: f('planks', OAK) });
+  add('furnace', 'utility', { front: f('furnace_front', ramp('#6f6f6f', 3, .14)), side: f('noise', ramp('#6f6f6f', 3, .14)), top: f('noise', ramp('#7a7a7a', 3, .12)) });
+  add('blast_furnace', 'utility', { front: f('furnace_lit', ramp('#5a5a5a', 3, .14)), side: f('noise', ramp('#5f5f5f', 3, .14)), top: f('smooth', '#6a6a6a'), glow: .25 });
+  add('smoker', 'utility', { front: f('furnace_lit', ramp('#6b5033', 3, .2)), side: f('bark', ramp('#6b5033', 3, .2)), top: f('rings', ramp('#8a6a3f', 3, .16)), glow: .25 });
+  add('chest', 'utility', { shape: 'chest', top: f('planks', OAK), side: f('planks', ramp('#8a6a3f', 4, .12)), front: f('chest_front', OAK), lock: f('metal', ['#8a8a8a']) });
+  add('trapped_chest', 'utility', { shape: 'chest', top: f('planks', OAK), side: f('planks', ramp('#8a6a3f', 4, .12)), front: f('chest_front', OAK), lock: f('metal', ['#c04a3a']) });
+  add('ender_chest', 'utility', { shape: 'chest', top: f('obsidian', ['#12102a', '#2f8f8a']), side: f('obsidian', ['#0e0c22', '#2f8f8a']), front: f('obsidian', ['#12102a', '#4ae0d8']), lock: f('metal', ['#3ee0d8']), glow: .3 });
+  add('barrel', 'utility', { top: f('crafting_top', ramp('#8a6a3f', 4, .12)), side: f('planks', ramp('#7a5a35', 4, .14)), bottom: f('planks', ramp('#7a5a35', 4, .14)) });
+  add('bookshelf', 'utility', { side: f('bookshelf', OAK), top: f('planks', OAK), bottom: f('planks', OAK) });
+  add('chiseled_bookshelf', 'utility', { side: f('bookshelf', ramp('#8a6a3f', 4, .12)), top: f('planks', OAK), bottom: f('planks', OAK) });
+  add('lectern', 'utility', { shape: 'sign', top: f('planks', OAK), side: f('planks', ramp('#8a6a3f', 4, .12)) });
+  add('cauldron', 'utility', { shape: 'cauldron', all: f('metal', ['#4a4a52']) });
+  add('anvil', 'utility', { shape: 'anvil', top: f('metal', ['#5a5a5f']), side: f('metal', ['#484850']) });
+  add('chipped_anvil', 'utility', { shape: 'anvil', top: f('blobs', ['#5a5a5f', '#4a4a50', '#6a6a70']), side: f('metal', ['#484850']) });
+  add('damaged_anvil', 'utility', { shape: 'anvil', top: f('blobs', ['#4a4a50', '#3a3a40', '#5a5a60']), side: f('metal', ['#3f3f46']) });
+  add('grindstone', 'utility', { shape: 'sign', top: f('noise', ramp('#8a8a8a', 3, .16)), side: f('planks', OAK) });
+  add('smithing_table', 'utility', { top: f('crafting_top', ramp('#3a3a42', 3, .2)), side: f('planks', ramp('#33333a', 3, .2)), front: f('crafting_front', ramp('#33333a', 3, .2)) });
+  add('fletching_table', 'utility', { top: f('crafting_top', ramp('#d7cb8d', 3, .12)), side: f('planks', ramp('#c8bc80', 3, .12)), front: f('crafting_front', ramp('#c8bc80', 3, .12)) });
+  add('cartography_table', 'utility', { top: f('crafting_top', ramp('#7a5a35', 3, .14)), side: f('planks', ramp('#6a4d2d', 3, .14)), front: f('crafting_front', ramp('#6a4d2d', 3, .14)) });
+  add('loom', 'utility', { top: f('crafting_top', ramp('#c8b48a', 3, .12)), side: f('planks', ramp('#8a6a3f', 3, .14)), front: f('crafting_front', ramp('#b8945f', 3, .14)) });
+  add('stonecutter', 'utility', { shape: 'slab', top: f('tiles', ramp('#8a8a8a', 3, .14)), side: f('noise', ramp('#7a7a7a', 3, .14)) });
+  add('composter', 'utility', { shape: 'cauldron', all: f('planks', ramp('#8a6a3f', 4, .14)) });
+  add('beehive', 'utility', { top: f('planks', ramp('#c8a24a', 3, .12)), side: f('honeycomb', ['#c8a24a']), front: f('honeycomb', ['#b8923a']) });
+  add('bee_nest', 'utility', { top: f('rings', ramp('#c8a24a', 3, .14)), side: f('honeycomb', ['#d8b25a']), front: f('honeycomb', ['#c8a24a']) });
+  add('honeycomb_block', 'utility', { all: f('honeycomb', ['#e0a83a']) });
+  add('jukebox', 'utility', { top: f('crafting_top', ramp('#6a4d2d', 3, .14)), side: f('planks', ramp('#5a3f24', 3, .14)) });
+  add('note_block', 'redstone', { all: f('planks', ramp('#6a4d2d', 4, .12)) });
+  add('enchanting_table', 'utility', { shape: 'slab', top: f('circuit', ['#2b2338', '#c8302a']), side: f('obsidian', ['#12102a', '#3b1d5c']), glow: .25 });
+  add('brewing_stand', 'utility', { shape: 'rod', alpha: 'cutout', all: f('metal', ['#8a8a8a']) });
+  add('spawner', 'utility', { all: f('spawner', ['#2b3a44']), alpha: 'cutout' });
+  add('trial_spawner', 'utility', { all: f('spawner', ['#3a4a58']), alpha: 'cutout', glow: .2 });
+  add('vault', 'utility', { all: f('circuit', ['#3a4a58', '#e0c83a']), glow: .3 });
+  add('beacon', 'light', { all: f('beacon', ['#1f2b2f']), glow: 1 });
+  add('decorated_pot', 'decoration', { shape: 'pot', all: f('chiseled', ramp('#96604a', 3, .16)) });
+  add('flower_pot', 'decoration', { shape: 'pot', all: f('noise', ramp('#96604a', 3, .16)) });
+  add('cake', 'decoration', { shape: 'cake', top: f('cake', ['#f0e3d0']), side: f('cake', ['#e8dcc8']), bottom: f('solid', '#e0d4c0') });
+  add('hay_block', 'nature', { side: f('hay', ramp('#c8a233', 3, .14)), top: f('rings', ramp('#c8a233', 3, .16)) });
+  add('dried_kelp_block', 'ocean', { all: f('noise', ['#2f3a2a', '#3a4a33', '#26301f']) });
+  add('pumpkin', 'nature', { side: f('pumpkin_side', ['#c07615']), top: f('rings', ramp('#c07615', 3, .14)) });
+  add('carved_pumpkin', 'nature', { front: f('pumpkin_face', ['#c07615']), side: f('pumpkin_side', ['#c07615']), top: f('rings', ramp('#c07615', 3, .14)) });
+  add('jack_o_lantern', 'light', { name: "Jack o'Lantern", front: f('pumpkin_face', ['#c07615'], { lit: true }), side: f('pumpkin_side', ['#c07615']), top: f('rings', ramp('#c07615', 3, .14)), glow: .85 });
+  add('melon', 'nature', { side: f('melon_side', ['#7ba52f', '#4f7a24']), top: f('melon_side', ['#8fbf3a', '#5f8a2a']) });
+  add('tnt', 'redstone', { name: 'TNT', side: f('tnt_side', ['#c03a30']), top: f('tnt_top', ['#c03a30']), bottom: f('tnt_top', ['#8a2a22']) });
+  add('target', 'redstone', { all: f('target', ['#e8e0d0', '#c94b3f']) });
+  add('scaffolding', 'utility', { shape: 'scaffold', all: f('planks', ramp('#c8ab4f', 3, .12)), alpha: 'cutout' });
+  add('ladder', 'utility', { shape: 'ladder', alpha: 'cutout', front: f('ladder', ['#b8945f']) });
+
+  /* ============================================================= redstone */
+
+  add('redstone_lamp', 'light', { all: f('circuit', ['#8a5a2a', '#ffd98a']), glow: .9 });
+  add('piston', 'redstone', { top: f('planks', ramp('#c8b48a', 3, .1)), side: f('metal', ['#8a8a8a']), bottom: f('metal', ['#7a7a7a']) });
+  add('sticky_piston', 'redstone', { top: f('moss', '#8aa84a'), side: f('metal', ['#8a8a8a']), bottom: f('metal', ['#7a7a7a']) });
+  add('observer', 'redstone', { front: f('circuit', ['#6f6f6f', '#c94b3f']), side: f('pillar', ramp('#6f6f6f', 3, .12)), top: f('pillar', ramp('#6f6f6f', 3, .12)) });
+  add('dispenser', 'redstone', { front: f('furnace_front', ramp('#6f6f6f', 3, .14)), side: f('noise', ramp('#6f6f6f', 3, .14)), top: f('noise', ramp('#7a7a7a', 3, .12)) });
+  add('dropper', 'redstone', { front: f('furnace_front', ramp('#6f6f6f', 3, .14)), side: f('noise', ramp('#6f6f6f', 3, .14)), top: f('noise', ramp('#7a7a7a', 3, .12)) });
+  add('hopper', 'redstone', { shape: 'hopper', all: f('metal', ['#4a4a52']) });
+  add('repeater', 'redstone', { shape: 'plate', top: f('circuit', ['#b0b0b0', '#c94b3f']), side: f('smooth', '#a8a8a8') });
+  add('comparator', 'redstone', { shape: 'plate', top: f('circuit', ['#b8b8b8', '#8a2a20']), side: f('smooth', '#a8a8a8') });
+  add('daylight_detector', 'redstone', { shape: 'slab', top: f('glass', ['#3ec7ff'], { a: 190 }), side: f('planks', OAK), alpha: 'blend' });
+  add('lever', 'redstone', { shape: 'button', all: f('noise', ramp('#7a7a7a', 3, .16)) });
+  add('lightning_rod', 'redstone', { shape: 'rod', all: f('copper', ['#c06a3c', '#a05a32']) });
+  add('tripwire_hook', 'redstone', { shape: 'button', all: f('metal', ['#8a8a8a']) });
+
+  [['rail', '#8a8a8a'], ['powered_rail', '#c8a22a'], ['detector_rail', '#a0a0a0'], ['activator_rail', '#7a5a5a']].forEach(function (r) {
+    add(r[0], 'redstone', { shape: 'flat', alpha: 'cutout', top: f('rail', [r[1], '#6b4f33']) });
+  });
+
+  /* =========================================================== decoration */
+
+  ['skeleton_skull', 'wither_skeleton_skull', 'zombie_head', 'creeper_head', 'piglin_head', 'dragon_head', 'player_head'].forEach(function (id) {
+    var c = { skeleton_skull: '#c8c8c0', wither_skeleton_skull: '#3a3a3a', zombie_head: '#4f8a4f', creeper_head: '#5aa85a', piglin_head: '#e0a08a', dragon_head: '#2a2230', player_head: '#b8916a' }[id];
+    add(id, 'decoration', { shape: 'skull', all: f('noise', ramp(c, 3, .14)) });
+  });
+
+  add('armor_stand', 'decoration', { shape: 'sign', all: f('planks', OAK) });
+  add('end_crystal', 'end', { shape: 'skull', glow: .8, all: f('crystal', ['#d264c8']) });
+  add('command_block', 'utility', { all: f('circuit', ['#b8865a', '#8a5a2a']) });
+  add('chain_command_block', 'utility', { all: f('circuit', ['#5a8a6a', '#2a5a3a']) });
+  add('repeating_command_block', 'utility', { all: f('circuit', ['#7a6aa8', '#4a3a8a']) });
+  add('structure_block', 'utility', { all: f('circuit', ['#5a4a5a', '#8a7a9a']) });
+  add('jigsaw', 'utility', { all: f('circuit', ['#4a4050', '#8a7a9a']) });
+  add('barrier', 'utility', { all: f('glass', ['#d03a3a'], { a: 60 }), alpha: 'blend' });
+  add('light_block', 'light', { all: f('glass', ['#ffe08a'], { a: 70 }), alpha: 'blend', glow: .9 });
+})();
+</script>
+<script>
+/* A very small WebGL renderer.
+
+   One canvas is stretched across the viewport and every visible card draws into
+   its own scissored rectangle of it, so a page showing 60 blocks still uses a
+   single GL context and a single frame loop. */
+(function (global) {
+  'use strict';
+
+  /* ------------------------------------------------------------- mat4 */
+
+  var M = {
+    ident: function () { return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]); },
+
+    mul: function (a, b, out) {
+      out = out || new Float32Array(16);
+      for (var c = 0; c < 4; c++) {
+        for (var r = 0; r < 4; r++) {
+          out[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] +
+            a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+        }
+      }
+      return out;
+    },
+
+    perspective: function (fovy, aspect, near, far) {
+      var f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+      return new Float32Array([
+        f / aspect, 0, 0, 0,
+        0, f, 0, 0,
+        0, 0, (far + near) * nf, -1,
+        0, 0, 2 * far * near * nf, 0
+      ]);
+    },
+
+    translate: function (x, y, z) {
+      return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1]);
+    },
+
+    rotY: function (a) {
+      var c = Math.cos(a), s = Math.sin(a);
+      return new Float32Array([c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1]);
+    },
+
+    rotX: function (a) {
+      var c = Math.cos(a), s = Math.sin(a);
+      return new Float32Array([1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]);
+    },
+
+    /** Upper-left 3x3 of a rotation-only matrix, for transforming normals. */
+    normal3: function (m) {
+      return new Float32Array([m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]]);
+    }
+  };
+
+  /* ------------------------------------------------------------- shaders */
+
+  var VS = [
+    'attribute vec3 aPos;',
+    'attribute vec3 aNorm;',
+    'attribute vec2 aUV;',
+    'uniform mat4 uMVP;',
+    'uniform mat3 uNM;',
+    'varying vec2 vUV;',
+    'varying vec3 vN;',
+    'void main() {',
+    '  vUV = aUV;',
+    '  vN = uNM * aNorm;',
+    '  gl_Position = uMVP * vec4(aPos, 1.0);',
+    '}'
+  ].join('\n');
+
+  var FS = [
+    'precision mediump float;',
+    'uniform sampler2D uTex;',
+    'uniform float uCut;',      // alpha cut-off
+    'uniform float uGlow;',     // 0 = fully shaded, 1 = self-lit
+    'uniform float uFade;',     // card entry fade
+    'varying vec2 vUV;',
+    'varying vec3 vN;',
+    'void main() {',
+    '  vec4 c = texture2D(uTex, vUV);',
+    '  if (c.a < uCut) discard;',
+    '  vec3 n = normalize(vN);',
+    // Minecraft-style fixed face shading, softened by a key light.
+    '  float face = n.y > 0.55 ? 1.0 : (n.y < -0.55 ? 0.52 : (abs(n.x) > abs(n.z) ? 0.66 : 0.84));',
+    '  float key = 0.86 + 0.14 * max(dot(n, normalize(vec3(0.35, 0.75, 0.56))), 0.0);',
+    // Bright texels glow, dark ones keep their shading: a torch's flame lights
+    // up while its stick does not.
+    '  float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));',
+    '  float g = uGlow * (0.3 + 0.7 * smoothstep(0.28, 0.72, lum));',
+    '  float lit = mix(face * key, 1.0, g);',
+    '  gl_FragColor = vec4(c.rgb * lit, c.a * uFade);',
+    '}'
+  ].join('\n');
+
+  function compile(gl, type, src) {
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      throw new Error('shader: ' + gl.getShaderInfoLog(s));
+    }
+    return s;
+  }
+
+  /* ------------------------------------------------------------- engine */
+
+  function Engine(canvas) {
+    this.canvas = canvas;
+    var opts = { alpha: true, antialias: true, premultipliedAlpha: false, depth: true };
+    var gl = canvas.getContext('webgl', opts) || canvas.getContext('experimental-webgl', opts);
+    if (!gl) throw new Error('WebGL is not available');
+    this.gl = gl;
+
+    var prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl, gl.VERTEX_SHADER, VS));
+    gl.attachShader(prog, compile(gl, gl.FRAGMENT_SHADER, FS));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      throw new Error('link: ' + gl.getProgramInfoLog(prog));
+    }
+    gl.useProgram(prog);
+
+    this.prog = prog;
+    this.a = {
+      pos: gl.getAttribLocation(prog, 'aPos'),
+      norm: gl.getAttribLocation(prog, 'aNorm'),
+      uv: gl.getAttribLocation(prog, 'aUV')
+    };
+    this.u = {
+      mvp: gl.getUniformLocation(prog, 'uMVP'),
+      nm: gl.getUniformLocation(prog, 'uNM'),
+      tex: gl.getUniformLocation(prog, 'uTex'),
+      cut: gl.getUniformLocation(prog, 'uCut'),
+      glow: gl.getUniformLocation(prog, 'uGlow'),
+      fade: gl.getUniformLocation(prog, 'uFade')
+    };
+    gl.enableVertexAttribArray(this.a.pos);
+    gl.enableVertexAttribArray(this.a.norm);
+    gl.enableVertexAttribArray(this.a.uv);
+    gl.uniform1i(this.u.tex, 0);
+
+    gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.CULL_FACE);
+    gl.cullFace(gl.BACK);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+    this.cache = Object.create(null);
+    this.dprCap = 2;
+    this.resize();
+  }
+
+  Engine.prototype.resize = function () {
+    var dpr = Math.min(global.devicePixelRatio || 1, this.dprCap);
+    var w = Math.floor(global.innerWidth * dpr);
+    var h = Math.floor(global.innerHeight * dpr);
+    if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas.width = w;
+      this.canvas.height = h;
+    }
+    this.dpr = dpr;
+  };
+
+  /** Upload (once) the mesh + texture atlas for a block definition. */
+  Engine.prototype.resource = function (block) {
+    var hit = this.cache[block.id];
+    if (hit) return hit;
+
+    var gl = this.gl;
+    var faces = Blocks.faceList(block);          // [{name, face}, ...]
+    var order = {}, list = [];
+    faces.forEach(function (f, i) { order[f.name] = i; list.push(f.face); });
+
+    var atlas = Textures.atlas(list, block.id);
+    var geo = Shapes.build(block.shape, function (name) {
+      var i = order[name];
+      if (i === undefined) i = order[Blocks.fallbackFace(name)];
+      if (i === undefined) i = order.side !== undefined ? order.side : 0;
+      return i;
+    }, atlas.tiles);
+
+    var tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, atlas.width, atlas.height, 0,
+      gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(atlas.data.buffer));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    function buf(data, target) {
+      var b = gl.createBuffer();
+      gl.bindBuffer(target, b);
+      gl.bufferData(target, data, gl.STATIC_DRAW);
+      return b;
+    }
+
+    var centre = [
+      (geo.min[0] + geo.max[0]) / 2,
+      (geo.min[1] + geo.max[1]) / 2,
+      (geo.min[2] + geo.max[2]) / 2
+    ];
+    var radius = Math.max(
+      Math.hypot(geo.max[0] - centre[0], geo.max[1] - centre[1], geo.max[2] - centre[2]),
+      0.5
+    );
+
+    var res = {
+      pos: buf(geo.pos, gl.ARRAY_BUFFER),
+      norm: buf(geo.norm, gl.ARRAY_BUFFER),
+      uv: buf(geo.uv, gl.ARRAY_BUFFER),
+      idx: buf(geo.idx, gl.ELEMENT_ARRAY_BUFFER),
+      count: geo.count,
+      tex: tex,
+      centre: centre,
+      radius: radius,
+      tiles: faces
+    };
+    this.cache[block.id] = res;
+    return res;
+  };
+
+  Engine.prototype.beginFrame = function () {
+    var gl = this.gl;
+    gl.enable(gl.SCISSOR_TEST);
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.scissor(0, 0, this.canvas.width, this.canvas.height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  };
+
+  Engine.prototype.endFrame = function () {
+    this.gl.disable(this.gl.SCISSOR_TEST);
+  };
+
+  /**
+   * Draw one block into a CSS-pixel rectangle of the viewport.
+   * view = {yaw, pitch, zoom, fade}
+   */
+  Engine.prototype.draw = function (rect, block, view) {
+    var gl = this.gl, dpr = this.dpr;
+    var w = Math.floor(rect.width * dpr), h = Math.floor(rect.height * dpr);
+    if (w < 2 || h < 2) return;
+
+    var x = Math.floor(rect.left * dpr);
+    var y = Math.floor((global.innerHeight - rect.bottom) * dpr);
+    gl.viewport(x, y, w, h);
+    gl.scissor(x, y, w, h);
+
+    var res = this.resource(block);
+    var zoom = view.zoom || 1;
+    var dist = (res.radius / zoom) * 3.55;
+
+    var proj = M.perspective(0.5, w / h, 0.05, 60);
+    var model = M.mul(M.rotX(view.pitch), M.rotY(view.yaw));
+    var m = M.mul(model, M.translate(-res.centre[0], -res.centre[1], -res.centre[2]));
+    var mv = M.mul(M.translate(0, 0, -dist), m);
+    var mvp = M.mul(proj, mv);
+
+    gl.useProgram(this.prog);
+    gl.uniformMatrix4fv(this.u.mvp, false, mvp);
+    gl.uniformMatrix3fv(this.u.nm, false, M.normal3(model));
+    gl.uniform1f(this.u.glow, block.glow || 0);
+    gl.uniform1f(this.u.fade, view.fade == null ? 1 : view.fade);
+
+    var blend = block.alpha === 'blend';
+    gl.uniform1f(this.u.cut, blend ? 0.02 : 0.5);
+    if (blend) {
+      gl.enable(gl.BLEND);
+      gl.depthMask(false);
+      gl.disable(gl.CULL_FACE);
+    } else {
+      gl.enable(gl.BLEND);
+      gl.depthMask(true);
+      if (block.alpha === 'cutout') gl.disable(gl.CULL_FACE); else gl.enable(gl.CULL_FACE);
+    }
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, res.tex);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, res.pos);
+    gl.vertexAttribPointer(this.a.pos, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, res.norm);
+    gl.vertexAttribPointer(this.a.norm, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, res.uv);
+    gl.vertexAttribPointer(this.a.uv, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, res.idx);
+    gl.drawElements(gl.TRIANGLES, res.count, gl.UNSIGNED_SHORT, 0);
+
+    gl.depthMask(true);
+  };
+
+  /** Copy a rectangle of the framebuffer into a 2D canvas (for PNG export). */
+  Engine.prototype.grab = function (rect) {
+    var gl = this.gl, dpr = this.dpr;
+    var w = Math.floor(rect.width * dpr), h = Math.floor(rect.height * dpr);
+    var x = Math.floor(rect.left * dpr);
+    var y = Math.floor((global.innerHeight - rect.bottom) * dpr);
+    var px = new Uint8Array(w * h * 4);
+    gl.readPixels(x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+
+    var out = document.createElement('canvas');
+    out.width = w; out.height = h;
+    var ctx = out.getContext('2d');
+    var img = ctx.createImageData(w, h);
+    for (var row = 0; row < h; row++) {                 // GL rows are bottom-up
+      var src = (h - 1 - row) * w * 4, dst = row * w * 4;
+      img.data.set(px.subarray(src, src + w * 4), dst);
+    }
+    ctx.putImageData(img, 0, 0);
+    return out;
+  };
+
+  global.Engine = Engine;
+  global.Mat4 = M;
+})(window);
+</script>
+<script>
+/* UI: the grid, the filters and the inspector.
+
+   All 3D drawing happens in one animation loop that walks the cards currently
+   on screen and paints each one into its slice of the shared canvas. */
+(function () {
+  'use strict';
+
+  var CAT_NAMES = {
+    all: 'All blocks', wood: 'Wood', stone: 'Stone', minerals: 'Ores & minerals',
+    nature: 'Nature', plants: 'Plants', colored: 'Colours', glass: 'Glass',
+    ocean: 'Ocean', nether: 'Nether', end: 'End', redstone: 'Redstone',
+    utility: 'Utility', light: 'Light', decoration: 'Decoration'
+  };
+
+  var CAT_ORDER = ['all', 'stone', 'wood', 'nature', 'plants', 'minerals', 'colored',
+    'glass', 'light', 'redstone', 'utility', 'decoration', 'ocean', 'nether', 'end'];
+
+  var $ = function (s) { return document.querySelector(s); };
+  var DEFAULT_ZOOM = 0.78;
+  var reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var stage = $('#stage');
+  var grid = $('#grid');
+  var engine;
+
+  try {
+    engine = new Engine(stage);
+  } catch (err) {
+    document.body.insertAdjacentHTML('afterbegin',
+      '<p style="padding:24px;color:#f9a">This browser could not start WebGL, so the blocks cannot be rendered: ' +
+      String(err.message) + '</p>');
+    return;
+  }
+
+  var all = Blocks.list.slice().sort(function (a, b) {
+    var ca = CAT_ORDER.indexOf(a.cat), cb = CAT_ORDER.indexOf(b.cat);
+    return ca === cb ? a.name.localeCompare(b.name) : ca - cb;
+  });
+
+  var state = {
+    cat: 'all',
+    query: [],
+    filtered: all,
+    cards: [],
+    visible: new Set(),
+    viewer: null,          // {index, yaw, pitch, zoom, spin}
+    capture: false
+  };
+
+  /* ------------------------------------------------------------- filters */
+
+  function haystack(block) {
+    if (!block.__hay) {
+      block.__hay = (block.id + ' ' + block.name + ' ' + (CAT_NAMES[block.cat] || '') +
+        ' ' + block.shape).toLowerCase().replace(/_/g, ' ');
+    }
+    return block.__hay;
+  }
+
+  function matches(block) {
+    if (state.cat !== 'all' && block.cat !== state.cat) return false;
+    if (!state.query) return true;
+    var hay = haystack(block);
+    return state.query.every(function (word) { return hay.indexOf(word) >= 0; });
+  }
+
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      var card = e.target.__card;
+      if (!card) return;
+      if (e.isIntersecting) state.visible.add(card);
+      else state.visible.delete(card);
+    });
+  }, { rootMargin: '160px 0px' });
+
+  function buildGrid() {
+    observer.disconnect();
+    state.visible.clear();
+    state.cards = [];
+    grid.textContent = '';
+
+    var frag = document.createDocumentFragment();
+    state.filtered.forEach(function (block, i) {
+      var el = document.createElement('button');
+      el.className = 'card';
+      el.type = 'button';
+      el.setAttribute('aria-label', block.name);
+
+      var slot = document.createElement('div');
+      slot.className = 'slot';
+      el.appendChild(slot);
+
+      var tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = CAT_NAMES[block.cat] || block.cat;
+      el.appendChild(tag);
+
+      if (block.glow >= .5) {
+        var dot = document.createElement('span');
+        dot.className = 'glow-dot';
+        el.appendChild(dot);
+      }
+
+      var name = document.createElement('span');
+      name.className = 'card-name';
+      name.textContent = block.name;
+      el.appendChild(name);
+
+      var card = { el: el, slot: slot, block: block, index: i, born: -1 };
+      el.__card = card;
+      el.addEventListener('click', function () { openViewer(i); });
+      state.cards.push(card);
+      frag.appendChild(el);
+    });
+
+    grid.appendChild(frag);
+    state.cards.forEach(function (c) { observer.observe(c.el); });
+
+    $('#empty').hidden = state.filtered.length > 0;
+    $('#count').innerHTML = '<strong>' + state.filtered.length + '</strong> of ' +
+      all.length + ' blocks' + (state.cat === 'all' ? '' : ' in ' + CAT_NAMES[state.cat].toLowerCase());
+  }
+
+  function applyFilters() {
+    state.filtered = all.filter(matches);
+    buildGrid();
+  }
+
+  /* ------------------------------------------------------------ chrome */
+
+  function buildCats() {
+    var counts = { all: all.length };
+    all.forEach(function (b) { counts[b.cat] = (counts[b.cat] || 0) + 1; });
+
+    var host = $('#cats');
+    CAT_ORDER.forEach(function (cat) {
+      if (!counts[cat]) return;
+      var b = document.createElement('button');
+      b.className = 'chip' + (cat === state.cat ? ' on' : '');
+      b.type = 'button';
+      b.dataset.cat = cat;
+      b.innerHTML = CAT_NAMES[cat] + ' <span class="n">' + counts[cat] + '</span>';
+      b.addEventListener('click', function () {
+        state.cat = cat;
+        host.querySelectorAll('.chip').forEach(function (c) { c.classList.toggle('on', c.dataset.cat === cat); });
+        applyFilters();
+        scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+      });
+      host.appendChild(b);
+    });
+  }
+
+  var search = $('#search');
+  search.addEventListener('input', function () {
+    state.query = search.value.toLowerCase().replace(/_/g, ' ').split(/\s+/).filter(Boolean);
+    $('#clear-search').hidden = !search.value;
+    applyFilters();
+  });
+
+  $('#clear-search').addEventListener('click', function () {
+    search.value = '';
+    state.query = [];
+    $('#clear-search').hidden = true;
+    applyFilters();
+    search.focus();
+  });
+
+  $('#random').addEventListener('click', function () {
+    if (!state.filtered.length) return;
+    openViewer((Math.random() * state.filtered.length) | 0);
+  });
+
+  var quality = $('#quality');
+  quality.addEventListener('click', function () {
+    engine.dprCap = engine.dprCap > 1 ? 1 : 2;
+    quality.textContent = engine.dprCap > 1 ? 'HD' : 'SD';
+    quality.setAttribute('aria-pressed', engine.dprCap > 1 ? 'true' : 'false');
+    engine.resize();
+  });
+
+  /* ------------------------------------------------------------ viewer */
+
+  var viewer = $('#viewer'), vSlot = $('#v-slot');
+
+  function openViewer(index) {
+    var block = state.filtered[index];
+    if (!block) return;
+    state.viewer = { index: index, yaw: -0.72, pitch: 0.5, zoom: DEFAULT_ZOOM, spin: !reduceMotion };
+    viewer.hidden = false;
+    stage.style.zIndex = '60';          // lift the shared canvas above the modal
+    document.body.style.overflow = 'hidden';
+    location.hash = block.id;
+
+    $('#v-name').textContent = block.name;
+    $('#v-id').textContent = 'minecraft:' + block.id;
+    $('#v-cat').textContent = CAT_NAMES[block.cat] || block.cat;
+    $('#v-shape').textContent = Shapes.label(block.shape);
+
+    var faces = Blocks.faceList(block);
+    $('#v-faces').textContent = faces.length + (faces.length === 1 ? ' texture' : ' textures');
+    $('#v-light').textContent = block.glow >= .5 ? 'Emits light' :
+      block.glow > 0 ? 'Faint glow' : (block.alpha === 'blend' ? 'Translucent' : 'None');
+
+    var tiles = $('#v-tiles');
+    tiles.textContent = '';
+    faces.forEach(function (entry, i) {
+      var wrap = document.createElement('div');
+      wrap.className = 'v-tile';
+      var canvas = document.createElement('canvas');
+      Textures.toCanvas(entry.face, block.id + '/' + i, canvas);
+      var label = document.createElement('span');
+      label.textContent = entry.name;
+      wrap.appendChild(canvas);
+      wrap.appendChild(label);
+      tiles.appendChild(wrap);
+    });
+
+    $('#v-spin').textContent = state.viewer.spin ? 'Pause spin' : 'Resume spin';
+    $('#v-pos').textContent = (index + 1) + ' / ' + state.filtered.length;
+  }
+
+  function closeViewer() {
+    state.viewer = null;
+    viewer.hidden = true;
+    stage.style.zIndex = '';
+    document.body.style.overflow = '';
+    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  }
+
+  function step(delta) {
+    if (!state.viewer) return;
+    var n = state.filtered.length;
+    openViewer((state.viewer.index + delta + n) % n);
+  }
+
+  viewer.addEventListener('click', function (e) {
+    if (e.target.hasAttribute('data-close')) closeViewer();
+  });
+  $('#v-prev').addEventListener('click', function () { step(-1); });
+  $('#v-next').addEventListener('click', function () { step(1); });
+  $('#v-spin').addEventListener('click', function () {
+    var v = state.viewer;
+    v.spin = !v.spin;
+    $('#v-spin').textContent = v.spin ? 'Pause spin' : 'Resume spin';
+  });
+  $('#v-reset').addEventListener('click', function () {
+    var v = state.viewer;
+    v.yaw = -0.72; v.pitch = 0.5; v.zoom = DEFAULT_ZOOM;
+  });
+  // Embedded pages (an iframe preview) cannot start a download, so don't offer it.
+  if (window.top !== window.self) $('#v-png').hidden = true;
+  $('#v-png').addEventListener('click', function () { state.capture = true; });
+
+  // Drag to orbit.
+  var drag = null;
+  vSlot.addEventListener('pointerdown', function (e) {
+    if (!state.viewer) return;
+    drag = { x: e.clientX, y: e.clientY };
+    vSlot.classList.add('dragging');
+    vSlot.setPointerCapture(e.pointerId);
+  });
+  vSlot.addEventListener('pointermove', function (e) {
+    if (!drag || !state.viewer) return;
+    var v = state.viewer;
+    v.yaw -= (e.clientX - drag.x) * 0.01;
+    v.pitch = Math.max(-1.45, Math.min(1.45, v.pitch + (e.clientY - drag.y) * 0.01));
+    drag.x = e.clientX; drag.y = e.clientY;
+  });
+  ['pointerup', 'pointercancel'].forEach(function (t) {
+    vSlot.addEventListener(t, function () { drag = null; vSlot.classList.remove('dragging'); });
+  });
+  vSlot.addEventListener('wheel', function (e) {
+    if (!state.viewer) return;
+    e.preventDefault();
+    var v = state.viewer;
+    v.zoom = Math.max(0.45, Math.min(3, v.zoom * (e.deltaY > 0 ? 0.92 : 1.08)));
+  }, { passive: false });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === '/' && document.activeElement !== search) {
+      e.preventDefault(); search.focus(); search.select(); return;
+    }
+    if (e.key === 'r' && document.activeElement !== search && !state.viewer) {
+      $('#random').click(); return;
+    }
+    if (!state.viewer) return;
+    if (e.key === 'Escape') closeViewer();
+    else if (e.key === 'ArrowLeft') step(-1);
+    else if (e.key === 'ArrowRight') step(1);
+  });
+
+  function savePng() {
+    var rect = vSlot.getBoundingClientRect();
+    var block = state.filtered[state.viewer.index];
+    var canvas = engine.grab(rect);
+    var a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = block.id + '.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  /* -------------------------------------------------------------- loop */
+
+  var resizePending = true;
+  var topbar = document.querySelector('.topbar');
+
+  function measureChrome() {
+    // The category bar sticks directly below the header, whatever its height.
+    document.documentElement.style.setProperty('--bar-h', topbar.offsetHeight + 'px');
+  }
+
+  addEventListener('resize', function () { resizePending = true; measureChrome(); });
+
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (resizePending) { engine.resize(); resizePending = false; }
+
+    var t = now / 1000;
+    engine.beginFrame();
+
+    if (state.viewer) {
+      var v = state.viewer;
+      if (v.spin) v.yaw += 0.008;
+      var rect = vSlot.getBoundingClientRect();
+      if (rect.width > 4) {
+        engine.draw(rect, state.filtered[v.index], { yaw: v.yaw, pitch: v.pitch, zoom: v.zoom });
+        if (state.capture) { state.capture = false; savePng(); }
+      }
+    } else {
+      state.visible.forEach(function (card) {
+        var rect = card.slot.getBoundingClientRect();
+        if (rect.bottom < -40 || rect.top > innerHeight + 40) return;
+        if (card.born < 0) card.born = t;
+        var fade = reduceMotion ? 1 : Math.min(1, (t - card.born) / 0.35);
+        var yaw = reduceMotion ? -0.72 : -0.72 + t * 0.35 + card.index * 0.7;
+        engine.draw(rect, card.block, { yaw: yaw, pitch: 0.5, zoom: 0.92, fade: fade });
+      });
+    }
+
+    engine.endFrame();
+  }
+
+  /* -------------------------------------------------------------- start */
+
+  buildCats();
+  measureChrome();
+  applyFilters();
+  requestAnimationFrame(frame);
+
+  var hash = decodeURIComponent(location.hash.replace('#', ''));
+  if (hash && Blocks.byId[hash]) {
+    var idx = state.filtered.indexOf(Blocks.byId[hash]);
+    if (idx >= 0) openViewer(idx);
+  }
+
+  // Expose a little for console tinkering.
+  window.Blockdex = { state: state, engine: engine, open: openViewer };
+})();
+</script>
+</body>
+</html>
