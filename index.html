@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blockdex — 3D Minecraft Block Explorer</title>
+<meta name="description" content="An interactive 3D gallery of 850+ Minecraft-style blocks, rendered live in WebGL with procedurally generated pixel textures.">
+<link rel="icon" href="assets/favicon.svg">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<canvas id="stage" aria-hidden="true"></canvas>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-cube" aria-hidden="true"></span>
+    <div>
+      <h1>Blockdex</h1>
+      <p>3D block explorer</p>
+    </div>
+  </div>
+
+  <div class="search-wrap">
+    <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4a6 6 0 1 0 3.7 10.7l4.8 4.8 1.4-1.4-4.8-4.8A6 6 0 0 0 10 4Zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"/></svg>
+    <input id="search" type="search" placeholder="Search 850+ blocks…  (press /)" autocomplete="off" spellcheck="false" aria-label="Search blocks">
+    <button id="clear-search" class="clear" type="button" title="Clear search" hidden>&times;</button>
+  </div>
+
+  <div class="topbar-actions">
+    <button id="random" class="btn" type="button" title="Open a random block (R)">Random</button>
+    <button id="quality" class="btn" type="button" title="Toggle render quality">HD</button>
+  </div>
+</header>
+
+<nav class="cats" id="cats" aria-label="Block categories"></nav>
+
+<main>
+  <div class="meta-row">
+    <span id="count" class="count"></span>
+    <span class="hint">Click a block to inspect it in 3D</span>
+  </div>
+  <div id="grid" class="grid"></div>
+  <p id="empty" class="empty" hidden>No blocks match that search.</p>
+</main>
+
+<footer class="site-foot">
+  <p>Every block is generated at runtime — geometry, 16&times;16 pixel textures and lighting are all procedural. No images, no libraries, no network requests.</p>
+  <p class="fine">A fan-made tribute. Not affiliated with or endorsed by Mojang or Microsoft.</p>
+</footer>
+
+<div id="viewer" class="viewer" hidden>
+  <div class="viewer-backdrop" data-close></div>
+  <div class="viewer-panel" role="dialog" aria-modal="true" aria-labelledby="v-name">
+    <button class="viewer-close" type="button" data-close title="Close (Esc)">&times;</button>
+    <div class="viewer-stage">
+      <div id="v-slot" class="v-slot"></div>
+    </div>
+    <div class="viewer-info">
+      <div class="v-head">
+        <h2 id="v-name">—</h2>
+        <code id="v-id">—</code>
+      </div>
+      <dl class="v-specs">
+        <div><dt>Category</dt><dd id="v-cat">—</dd></div>
+        <div><dt>Shape</dt><dd id="v-shape">—</dd></div>
+        <div><dt>Faces</dt><dd id="v-faces">—</dd></div>
+        <div><dt>Light</dt><dd id="v-light">—</dd></div>
+      </dl>
+      <div id="v-tiles" class="v-tiles"></div>
+      <div class="v-controls">
+        <button class="btn" type="button" id="v-spin">Pause spin</button>
+        <button class="btn" type="button" id="v-reset">Reset view</button>
+        <button class="btn" type="button" id="v-png">Save PNG</button>
+      </div>
+      <div class="v-nav">
+        <button class="btn" type="button" id="v-prev" title="Previous block (&larr;)">&#8249; Prev</button>
+        <span id="v-pos" class="v-pos"></span>
+        <button class="btn" type="button" id="v-next" title="Next block (&rarr;)">Next &#8250;</button>
+      </div>
+      <p class="v-tip">Drag to orbit &middot; scroll to zoom &middot; arrow keys to browse</p>
+    </div>
+  </div>
+</div>
+
+<script src="js/rng.js"></script>
+<script src="js/textures.js"></script>
+<script src="js/shapes.js"></script>
+<script src="js/blocks.js"></script>
+<script src="js/blocks-world.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
